@@ -96,7 +96,7 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
                 stars=(3 if response_ms and response_ms<=7000 else 2 if response_ms and response_ms<=15000 else 1) if correct else 0
                 score=max(40,100-min(int(response_ms/500),35)) if correct else 0
                 c.execute(text("""INSERT INTO stage_progress(user_id,stage_id,stars,best_score,completed,attempts) VALUES(:u,:s,:stars,:score,:done,1)
-                ON CONFLICT(user_id,stage_id) DO UPDATE SET stars=CASE WHEN stars>:stars THEN stars ELSE :stars END,best_score=CASE WHEN best_score>:score THEN best_score ELSE :score END,completed=(completed OR :done),attempts=attempts+1,updated_at=CURRENT_TIMESTAMP"""),{"u":user_id,"s":st,"stars":stars,"score":score,"done":bool(correct)})
+                ON CONFLICT(user_id,stage_id) DO UPDATE SET stars=CASE WHEN stage_progress.stars>:stars THEN stage_progress.stars ELSE :stars END,best_score=CASE WHEN stage_progress.best_score>:score THEN stage_progress.best_score ELSE :score END,completed=(stage_progress.completed OR :done),attempts=stage_progress.attempts+1,updated_at=CURRENT_TIMESTAMP"""),{"u":user_id,"s":st,"stars":stars,"score":score,"done":bool(correct)})
                 if correct and int(st)%100==len(next((c["stages"] for c in CHAPTERS if c["id"]==int(st)//100), [])):
                     next_ch=min(len(CHAPTERS),int(st)//100+1)
                     c.execute(text("UPDATE users_profile SET unlocked_chapter=CASE WHEN unlocked_chapter>:n THEN unlocked_chapter ELSE :n END WHERE id=:u"),{"n":next_ch,"u":user_id})

@@ -52,6 +52,9 @@ def test_stage_lesson_shows_meaning_pronunciation_before_practice():
     assert response.status_code == 200
     assert "starving".encode("utf-8") in response.data
     assert "餓到不行".encode("utf-8") in response.data
+    assert "delighted".encode("utf-8") in response.data
+    assert "confident".encode("utf-8") in response.data
+    assert "nervous".encode("utf-8") in response.data
     assert b'data-speak-word="starving"' in response.data
     assert b"/battle?chapter=1&amp;stage=101&amp;difficulty=beginner" in response.data
 

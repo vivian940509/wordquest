@@ -35,12 +35,7 @@ def study(): return render_template("study.html",profile=current_user(),words=ST
 
 def stage_words(chapter, stage=None):
     words=[w for w in STARTER_WORDS if int(w.get("chapter",0))==int(chapter)]
-    if stage:
-        index=max(0,(int(stage)%100)-1)
-        if index < len(words):
-            start=max(0,index-1)
-            return words[start:index+3]
-    return words[:6]
+    return words
 
 @app.get("/map")
 def map_page():
