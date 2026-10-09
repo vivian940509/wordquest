@@ -7,7 +7,7 @@ from word_data import CHAPTERS
 
 def test_vercel_routes_to_python_serverless_entrypoint():
     config = json.loads((Path(app.root_path) / "vercel.json").read_text(encoding="utf-8"))
-    assert config["rewrites"] == [{"source": "/(.*)", "destination": "/api/index.py"}]
+    assert config["rewrites"] == [{"source": "/(.*)", "destination": "/api/index"}]
     entrypoint = (Path(app.root_path) / "api" / "index.py").read_text(encoding="utf-8")
     assert "from app import app" in entrypoint
 
