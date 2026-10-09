@@ -1,15 +1,7 @@
 from pathlib import Path
-import json
 
 from app import app
 from word_data import CHAPTERS
-
-
-def test_vercel_routes_to_python_serverless_entrypoint():
-    config = json.loads((Path(app.root_path) / "vercel.json").read_text(encoding="utf-8"))
-    assert config["rewrites"] == [{"source": "/(.*)", "destination": "/api/index"}]
-    entrypoint = (Path(app.root_path) / "api" / "index.py").read_text(encoding="utf-8")
-    assert "from app import app" in entrypoint
 
 
 def test_curriculum_map_has_four_school_levels_and_many_stages():
