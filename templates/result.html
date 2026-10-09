@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}結果 | WordQuest{% endblock %}
+{% block content %}
+<section class="result-layout">
+  <article class="result-card {{ 'win' if result.correct else 'retry' }}">
+    <p class="eyebrow">{{ 'Quest Clear' if result.correct else 'Wrong Answer Review' }}</p>
+    <h1>{{ result.message }}</h1>
+
+    {% if not result.correct %}
+      <div class="analysis-status"><span>📌</span><div><strong>這題已加入錯題複習</strong><small>系統會依熟練度安排再次出現，不用自己記時間。</small></div></div>
+      <div class="analysis-flow" aria-label="錯題解析流程">
+        <span class="active">1 你的答案</span><i>→</i><span>2 正確答案</span><i>→</i><span>3 錯誤原因</span><i>→</i><span>4 生活例句</span>
+      </div>
+
+      <div class="answer-compare">
+        <section class="answer-box wrong-box">
+          <small>你選了什麼</small>
+          <strong>{{ analysis.selected }}</strong>
+          <span>這個答案和題目情境不吻合</span>
+        </section>
+        <section class="answer-box correct-box">
+          <small>正確答案</small>
+          <strong>{{ analysis.correct_answer }}</strong>
+          <span>先把正確字義和情境連在一起</span>
+        </section>
+      </div>
+
+      <div class="explain-stack">
+        <details open>
+          <summary><span>🧠</span><strong>為什麼會錯？</strong><em>查看解析</em></summary>
+          <p>{{ analysis.why_wrong }}</p>
+        </details>
+        <details open>
+          <summary><span>💡</span><strong>生活化記法</strong><em>建立記憶鉤子</em></summary>
+          <p>{{ analysis.memory_tip }}</p>
+        </details>
+        <details open>
+          <summary><span>💬</span><strong>放進生活情境</strong><em>看例句</em></summary>
+          <p class="example">{{ analysis.example }}</p>
+          {% if dictionary %}<button class="sound-button" type="button" data-speak-word="{{ analysis.correct_answer }}">🔊 聽正確答案</button>{% endif %}
+        </details>
+      </div>
+
+      <div class="teacher-box">
+        <div><strong>🤖 AI 老師</strong><small>還是不懂？換一種更白話的方式講給你聽。</small></div>
+        <button class="secondary-action" type="button" data-ai-explain>再解釋一次</button>
+        <p class="teacher-answer" data-ai-answer hidden></p>
+      </div>
+    {% else %}
+      <p>{{ question.explanation }}</p>
+    {% endif %}
+
+    {% if result.speech_score is defined %}<p><strong>語音相似度 {{ result.speech_score }}%</strong> · {{ result.speech_feedback }}</p>{% endif %}
+    <div class="reward-row"><span>EXP +{{ result.exp }}</span><span>金幣 +{{ result.coins }}</span><span>HP {{ result.hp_delta }}</span></div>
+  </article>
+
+  {% if dictionary %}
+  <article class="dictionary-card">
+    <p class="eyebrow">Word Card</p>
+    <h2>{{ dictionary.word }} <small>{{ dictionary.phonetic }}</small></h2>
+    <strong class="local-meaning">{{ dictionary.local_hint }}</strong>
+    <p>{{ dictionary.definition }}</p>
+    <button class="sound-button" type="button" data-speak-word="{{ dictionary.word }}">聽發音</button>
+  </article>
+  {% endif %}
+
+  <div class="actions">
+    {% if question.challenge_code %}
+      {% if question.challenge_round < 5 %}<a class="primary-action" href="{{ url_for('battle',chapter=question.chapter_id,stage=question.stage_id or '',difficulty=question.difficulty,challenge=question.challenge_code,round=question.challenge_round+1) }}">下一題（{{ question.challenge_round+1 }}/5）</a>
+      {% else %}<a class="primary-action" href="{{ url_for('friends',code=question.challenge_code) }}">查看挑戰排行榜</a>{% endif %}
+    {% elif question.is_review %}
+      <a class="primary-action" href="{{ url_for('review') }}">下一個錯題</a><a class="secondary-action" href="{{ url_for('mistakes') }}">回錯題中心</a>
+    {% else %}
+      {% if not result.correct and dictionary %}<a class="primary-action" href="{{ url_for('review',word=dictionary.word) }}">立即複習這個字</a>{% else %}<a class="primary-action" href="{{ url_for('map_page') }}">回關卡地圖</a>{% endif %}
+      <a class="secondary-action" href="{{ url_for('battle',chapter=question.chapter_id,stage=question.stage_id,difficulty=question.difficulty) }}">再挑戰一次</a>
+    {% endif %}
+    {% if not question.challenge_code and not question.is_review %}<a class="secondary-action" href="{{ url_for('map_page') }}">查看地圖進度</a>{% endif %}
+  </div>
+</section>
+{% endblock %}

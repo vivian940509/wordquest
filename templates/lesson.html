@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}關卡預習 | WordQuest{% endblock %}
+{% block content %}
+<section class="study-hero">
+  <div>
+    <p class="eyebrow">Before Practice</p>
+    <h1>{{ chapter.icon }} {{ stage.title if stage else chapter.title }}</h1>
+    <p>先看中文意思、英文單字與例句，聽完發音後再開始練習。</p>
+  </div>
+  <a class="primary-action" href="{{ url_for('battle',chapter=chapter.id,stage=stage_id,difficulty=difficulty) }}">開始練習</a>
+</section>
+
+<section class="study-grid">
+  {% for item in words %}
+  <article class="study-card lesson-card">
+    <div>
+      <p class="eyebrow">{{ item.pos }}</p>
+      <h2>{{ item.word }}</h2>
+      <strong>{{ item.zh }}</strong>
+    </div>
+    <p>{{ item.context }}</p>
+    <small>{{ item.memory }}</small>
+    <div class="study-card-footer">
+      <small>{{ item.example }}</small>
+      <button class="sound-button" type="button" data-speak-word="{{ item.word }}">聽發音</button>
+    </div>
+  </article>
+  {% endfor %}
+</section>
+
+<section class="lesson-start-panel">
+  <div>
+    <p class="eyebrow">Ready</p>
+    <h2>練習時不會顯示中文提示</h2>
+    <p>剛剛先學意思與發音，進入練習後要靠情境判斷英文。</p>
+  </div>
+  <a class="primary-action" href="{{ url_for('battle',chapter=chapter.id,stage=stage_id,difficulty=difficulty) }}">開始練習</a>
+</section>
+{% endblock %}

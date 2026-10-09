@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}關卡地圖 | WordQuest{% endblock %}
+{% block content %}
+<section class="page-heading map-heading">
+  <div>
+    <p class="eyebrow">Quest Map</p>
+    <h1>關卡地圖</h1>
+    <p>國小、國中、高中、大學四個程度，每章 12 關。先預習單字與發音，再進入無中文提示的英文練習。</p>
+  </div>
+  <div class="map-summary">
+    <div><strong>{{ metrics.completed_stages }}/{{ metrics.total_stages }}</strong><span>完成關卡</span></div>
+    <div><strong>{{ metrics.total_stars }}/{{ metrics.max_stars }}</strong><span>累積星星</span></div>
+    <div><strong>{{ earned|length }}/{{ achievements|length }}</strong><span>解鎖成就</span></div>
+  </div>
+</section>
+
+{% for chapter in chapters %}
+{% set stat=chapter_stats[chapter.id] %}
+<section class="chapter quest-chapter {{ 'locked' if chapter.id > profile.unlocked_chapter else '' }}">
+  <div class="chapter-head">
+    <div>
+      <p class="eyebrow">Chapter {{ chapter.id }}</p>
+      <h2>{{ chapter.icon }} 第{{ chapter.id }}章：{{ chapter.title }}</h2>
+      <p>{{ chapter.description }}</p>
+    </div>
+    <div class="chapter-progress-copy">
+      <strong>{{ stat.done }}/{{ stat.total }} 關</strong>
+      <span>{{ stat.stars }}/{{ stat.max_stars }} ⭐</span>
+    </div>
+  </div>
+  <div class="chapter-progress"><i style="width:{{ stat.percent }}%"></i></div>
+
+  {% if chapter.id > profile.unlocked_chapter %}
+    <div class="chapter-lock-panel">
+      <span>🔒</span>
+      <div><strong>章節尚未解鎖</strong><small>完成上一章 Boss 關即可開啟。</small></div>
+    </div>
+  {% else %}
+  <div class="quest-path">
+    {% for s in chapter.stages %}
+      {% set p=progress.get(s.id) %}
+      {% set prev=chapter.stages[loop.index0-1] if loop.index0 > 0 else none %}
+      {% set prevp=progress.get(prev.id) if prev else none %}
+      {% set stage_locked=prev and not (prevp and prevp.completed) %}
+      <div class="quest-node-wrap">
+        {% if not loop.first %}<span class="quest-line {{ 'active' if prevp and prevp.completed else '' }}"></span>{% endif %}
+        {% if stage_locked %}
+          <div class="quest-node locked-node" aria-label="未解鎖關卡">
+            <div class="node-orb">🔒</div>
+            <strong>{{ loop.index }}. {{ s.title }}</strong>
+            <span>{{ {'beginner':'初級','intermediate':'中級','advanced':'高級'}[s.difficulty] }}</span>
+            <small>先完成上一關</small>
+          </div>
+        {% else %}
+          <a class="quest-node {{ 'done' if p and p.completed else '' }} {{ 'boss-node' if loop.last else '' }}" href="{{ url_for('lesson',chapter=chapter.id,stage=s.id,difficulty=s.difficulty) }}">
+            <div class="node-orb">{{ '👑' if loop.last else ('✓' if p and p.completed else loop.index) }}</div>
+            <strong>{{ s.title }}</strong>
+            <span>{{ {'beginner':'初級','intermediate':'中級','advanced':'高級'}[s.difficulty] }}</span>
+            <small>{{ '★' * (p.stars if p else 0) }}{{ '☆' * (3-(p.stars if p else 0)) }}</small>
+          </a>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+
+<section class="achievement-section">
+  <div class="section-title"><div><p class="eyebrow">Achievements</p><h2>成就收藏冊</h2></div><span>完成目標會自動解鎖並發放金幣</span></div>
+  <div class="achievement-grid">
+    {% for a in achievements %}
+      {% set unlocked=a.key in earned %}
+      <article class="achievement-card {{ 'earned' if unlocked else 'achievement-locked' }}">
+        <div class="achievement-icon">{{ a.icon if unlocked else '🔒' }}</div>
+        <div><strong>{{ a.title }}</strong><p>{{ a.description }}</p><small>{{ '已解鎖' if unlocked else '尚未解鎖' }} · 獎勵 {{ a.reward }} 🪙</small></div>
+      </article>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}
