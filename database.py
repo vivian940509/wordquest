@@ -87,7 +87,7 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
             row=c.execute(text("SELECT proficiency_level,mistake_count FROM user_vocabulary WHERE user_id=:u AND word=:w"),{"u":user_id,"w":word}).mappings().first()
             was_review=bool(row and int(row.get("mistake_count",0) or 0)>0); old=int(row["proficiency_level"]) if row else 0; new=min(5, old+1) if correct else max(0, old-1); due=next_review_time(new if correct else 0).isoformat()
             c.execute(text("""INSERT INTO user_vocabulary(user_id,word,proficiency_level,next_review_time,mistake_count,correct_count,last_seen_at)
-            VALUES(:u,:w,:p,:due,:m,:ok,CURRENT_TIMESTAMP) ON CONFLICT(user_id,word) DO UPDATE SET proficiency_level=:p,next_review_time=:due,mistake_count=mistake_count+:m,correct_count=correct_count+:ok,last_seen_at=CURRENT_TIMESTAMP"""),{"u":user_id,"w":word,"p":new,"due":due,"m":0 if correct else 1,"ok":1 if correct else 0})
+            VALUES(:u,:w,:p,:due,:m,:ok,CURRENT_TIMESTAMP) ON CONFLICT(user_id,word) DO UPDATE SET proficiency_level=:p,next_review_time=:due,mistake_count=user_vocabulary.mistake_count+:m,correct_count=user_vocabulary.correct_count+:ok,last_seen_at=CURRENT_TIMESTAMP"""),{"u":user_id,"w":word,"p":new,"due":due,"m":0 if correct else 1,"ok":1 if correct else 0})
         if question:
             c.execute(text("""INSERT INTO answer_history(user_id,chapter_id,stage_id,difficulty,mode,prompt,selected_answer,correct_answer,is_correct,response_ms,speech_score)
             VALUES(:u,:ch,:st,:d,:mo,:p,:s,:a,:ok,:ms,:ss)"""),{"u":user_id,"ch":question.get("chapter_id"),"st":question.get("stage_id"),"d":question.get("difficulty"),"mo":question.get("mode"),"p":question.get("prompt"),"s":selected,"a":question.get("answer"),"ok":bool(correct),"ms":response_ms,"ss":speech_score})
@@ -103,7 +103,7 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
         metric="review_attempts" if question and question.get("is_review") else "speech_attempts" if question and question.get("mode")=="speech" else "correct_answers" if correct else None
         if metric:
             c.execute(text(f"""INSERT INTO daily_progress(user_id,progress_date,{metric}) VALUES(:u,:today,1)
-            ON CONFLICT(user_id,progress_date) DO UPDATE SET {metric}={metric}+1"""),{"u":user_id,"today":app_today().isoformat()})
+            ON CONFLICT(user_id,progress_date) DO UPDATE SET {metric}=daily_progress.{metric}+1"""),{"u":user_id,"today":app_today().isoformat()})
 
     # Achievement checks are idempotent; rewards are granted only on first unlock.
     return refresh_achievements(user_id)
