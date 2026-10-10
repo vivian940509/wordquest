@@ -85,6 +85,68 @@ def test_battle_page_uses_question_time_limit_after_preview():
     assert b'data-answer-form' in response.data
 
 
+def test_pronounce_falls_back_to_same_origin_tts_when_dictionary_has_no_audio(monkeypatch):
+    app.config["TESTING"] = True
+
+    def fake_lookup(word):
+        return {"word": word, "phonetic": "", "audio": "", "definition": ""}
+
+    monkeypatch.setattr("app.lookup_word", fake_lookup)
+    with app.test_client() as client:
+        response = client.get("/api/pronounce?word=starving")
+
+    assert response.status_code == 200
+    assert response.get_json()["audio"] == "/api/tts?word=starving"
+
+
+def test_tts_proxy_returns_same_origin_audio(monkeypatch):
+    app.config["TESTING"] = True
+
+    class FakeTtsResponse:
+        content = b"mp3-bytes"
+        headers = {"Content-Type": "audio/mpeg"}
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, headers=None, timeout=None):
+        assert "translate_tts" in url
+        assert "starving" in url
+        return FakeTtsResponse()
+
+    monkeypatch.setattr("app.requests.get", fake_get)
+    with app.test_client() as client:
+        response = client.get("/api/tts?word=starving")
+
+    assert response.status_code == 200
+    assert response.data == b"mp3-bytes"
+    assert response.content_type == "audio/mpeg"
+
+
+def test_register_logs_in_without_email_verification(monkeypatch):
+    app.config["TESTING"] = True
+
+    def fake_auth(path, payload=None, access_token=None):
+        return {"user": {"id": "11111111-1111-4111-8111-111111111111", "user_metadata": {"username": "Nova"}}}, None
+
+    def fake_profile(auth_user_id, username="勇者", guest_user_id=None):
+        return {"id": "profile-123", "username": username}
+
+    monkeypatch.setattr("app.supabase_auth_request", fake_auth)
+    monkeypatch.setattr("app.ensure_auth_profile", fake_profile)
+    with app.test_client() as client:
+        response = client.post(
+            "/register",
+            data={"username": "Nova", "email": "nova@example.com", "password": "secret1"},
+        )
+        with client.session_transaction() as session:
+            auth_email = session.get("auth_email")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+    assert auth_email == "nova@example.com"
+
+
 def test_answer_redirects_to_get_result_page():
     app.config["TESTING"] = True
     with app.test_client() as client:

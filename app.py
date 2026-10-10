@@ -1,7 +1,8 @@
 import os, time, requests
 from datetime import timedelta
+from urllib.parse import quote
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for, flash
+from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for, flash
 from battle_engine import build_battle, build_review_question, grade_answer, build_wrong_answer_analysis
 from database import (apply_battle_result, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress,
                       fetch_daily, fetch_items, buy_item, has_item, create_challenge, fetch_challenge, touch_login, record_challenge_result, challenge_leaderboard,
@@ -63,11 +64,8 @@ def register():
         if err: flash(err); return render_template("register.html")
         user=data.get("user") or {}; profile=ensure_auth_profile(user.get("id"),username or email.split("@")[0],session.get("user_id"))
         session["user_id"]=profile["id"]
-        if data.get("access_token"):
-            session["auth_email"]=email; session.permanent=True; flash("註冊完成，原本的訪客進度已保留。")
-            return redirect(url_for("index"))
-        flash("註冊完成，請先到信箱完成 Email 驗證，再回來登入。")
-        return redirect(url_for("login"))
+        session["auth_email"]=email; session.permanent=True; flash("註冊完成，原本的訪客進度已保留。")
+        return redirect(url_for("index"))
     return render_template("register.html")
 
 @app.post("/logout")
@@ -207,7 +205,22 @@ def api_pronounce():
     audio=(item.get("audio") or "").strip()
     if audio.startswith("//"):
         audio="https:"+audio
+    if not audio:
+        audio=url_for("api_tts",word=word)
     return jsonify({"audio":audio,"phonetic":item.get("phonetic") or ""})
+
+@app.get("/api/tts")
+def api_tts():
+    word=(request.args.get("word") or "").strip()
+    if not word:
+        return jsonify({"error":"缺少單字"}),400
+    url=f"https://translate.google.com/translate_tts?ie=UTF-8&q={quote(word)}&tl=en&client=tw-ob"
+    try:
+        r=requests.get(url,headers={"User-Agent":"Mozilla/5.0"},timeout=10)
+        r.raise_for_status()
+    except Exception:
+        return jsonify({"error":"暫時無法取得發音"}),502
+    return Response(r.content,mimetype=(r.headers.get("Content-Type") or "audio/mpeg").split(";")[0])
 
 @app.post("/api/teacher/explain")
 def api_teacher_explain():
