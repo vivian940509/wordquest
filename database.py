@@ -37,7 +37,7 @@ def _initialize_sqlite(engine):
         for stmt in [x.strip() for x in schema.split(";") if x.strip()]: c.execute(text(stmt))
         # forward-compatible columns for older local db
         cols={r[1] for r in c.execute(text("PRAGMA table_info(users_profile)")).all()}
-        for name, ddl in {"streak_freezes":"INTEGER DEFAULT 0","unlocked_chapter":"INTEGER DEFAULT 1","equipped_gear":"TEXT DEFAULT ''","created_at":"TEXT"}.items():
+        for name, ddl in {"auth_user_id":"TEXT","streak_freezes":"INTEGER DEFAULT 0","unlocked_chapter":"INTEGER DEFAULT 1","equipped_gear":"TEXT DEFAULT ''","created_at":"TEXT"}.items():
             if name not in cols: c.execute(text(f"ALTER TABLE users_profile ADD COLUMN {name} {ddl}"))
         c.execute(text("UPDATE users_profile SET created_at=CURRENT_TIMESTAMP WHERE created_at IS NULL"))
     _initialized_sqlite_urls.add(url)
@@ -55,6 +55,28 @@ def ensure_guest_profile(user_id=None, username="勇者"):
         c.execute(text("INSERT INTO users_profile(id,username,level,exp,hp,coins,current_streak,last_login) VALUES(:id,:u,1,0,100,0,1,:today)"),{"id":user_id,"u":username,"today":app_today().isoformat()})
     return fetch_profile(user_id)
 
+
+
+def ensure_auth_profile(auth_user_id, username="勇者", guest_user_id=None):
+    """Return the profile linked to a Supabase Auth user, preserving a guest profile when possible."""
+    with db_connection() as c:
+        existing=c.execute(text("SELECT * FROM users_profile WHERE auth_user_id=:a"),{"a":auth_user_id}).mappings().first()
+        if existing: return dict(existing)
+        if guest_user_id:
+            guest=c.execute(text("SELECT * FROM users_profile WHERE id=:id"),{"id":guest_user_id}).mappings().first()
+            if guest and not guest.get("auth_user_id"):
+                c.execute(text("UPDATE users_profile SET auth_user_id=:a, username=:u WHERE id=:id"),{"a":auth_user_id,"u":username or guest.get("username") or "勇者","id":guest_user_id})
+                return dict(c.execute(text("SELECT * FROM users_profile WHERE id=:id"),{"id":guest_user_id}).mappings().first())
+        new_id=str(uuid.uuid4())
+        c.execute(text("INSERT INTO users_profile(id,auth_user_id,username,level,exp,hp,coins,current_streak,last_login) VALUES(:id,:a,:u,1,0,100,0,1,:today)"),{"id":new_id,"a":auth_user_id,"u":username or "勇者","today":app_today().isoformat()})
+    return fetch_profile(new_id)
+
+def update_username(user_id, username):
+    username=(username or "").strip()[:24]
+    if not username: return False
+    with db_connection() as c:
+        c.execute(text("UPDATE users_profile SET username=:n WHERE id=:u"),{"n":username,"u":user_id})
+    return True
 
 def touch_login(user_id):
     """Update login streak. One missed day can consume a streak freeze."""
@@ -93,8 +115,9 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
             VALUES(:u,:ch,:st,:d,:mo,:p,:s,:a,:ok,:ms,:ss)"""),{"u":user_id,"ch":question.get("chapter_id"),"st":question.get("stage_id"),"d":question.get("difficulty"),"mo":question.get("mode"),"p":question.get("prompt"),"s":selected,"a":question.get("answer"),"ok":bool(correct),"ms":response_ms,"ss":speech_score})
             st=question.get("stage_id")
             if st:
-                stars=(3 if response_ms and response_ms<=7000 else 2 if response_ms and response_ms<=15000 else 1) if correct else 0
-                score=max(40,100-min(int(response_ms/500),35)) if correct else 0
+                limit_ms=max(1000,int(question.get("time_limit",12))*1000)
+                stars=(3 if response_ms and response_ms<=limit_ms*0.4 else 2 if response_ms and response_ms<=limit_ms*0.75 else 1) if correct else 0
+                score=max(40,100-min(int(response_ms/max(limit_ms/35,1)),35)) if correct else 0
                 c.execute(text("""INSERT INTO stage_progress(user_id,stage_id,stars,best_score,completed,attempts) VALUES(:u,:s,:stars,:score,:done,1)
                 ON CONFLICT(user_id,stage_id) DO UPDATE SET stars=CASE WHEN stage_progress.stars>:stars THEN stage_progress.stars ELSE :stars END,best_score=CASE WHEN stage_progress.best_score>:score THEN stage_progress.best_score ELSE :score END,completed=(stage_progress.completed OR :done),attempts=stage_progress.attempts+1,updated_at=CURRENT_TIMESTAMP"""),{"u":user_id,"s":st,"stars":stars,"score":score,"done":bool(correct)})
                 if correct and int(st)%100==len(next((c["stages"] for c in CHAPTERS if c["id"]==int(st)//100), [])):

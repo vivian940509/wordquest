@@ -1,0 +1,3 @@
+{% extends "base.html" %}{% block title %}註冊 | WordQuest{% endblock %}{% block content %}
+<section class="auth-shell"><article class="auth-card"><p class="eyebrow">Create account</p><h1>建立勇者帳號</h1><p>目前瀏覽器的訪客進度會直接保留下來，不用重玩。</p><form class="stack-form" method="post"><label>勇者名稱<input type="text" name="username" maxlength="24" required></label><label>Email<input type="email" name="email" autocomplete="email" required></label><label>密碼<input type="password" name="password" minlength="6" autocomplete="new-password" required></label><button class="primary-action" type="submit">註冊</button></form><p class="auth-switch">已經有帳號？<a href="{{ url_for('login') }}">直接登入</a></p></article></section>
+{% endblock %}

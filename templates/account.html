@@ -1,0 +1,5 @@
+{% extends "base.html" %}{% block title %}我的帳號 | WordQuest{% endblock %}{% block content %}
+<section class="page-heading"><p class="eyebrow">Player profile</p><h1>{{ profile.username }}</h1><p>{{ auth_email or '訪客模式' }}</p></section>
+<section class="account-stats"><article><strong>{{ stats.completed }}/48</strong><span>完成關卡</span></article><article><strong>{{ stats.stars }}/144</strong><span>累積星星</span></article><article><strong>{{ stats.words }}</strong><span>學過單字</span></article><article><strong>{{ stats.due }}</strong><span>待複習</span></article></section>
+{% if auth_email %}<section class="auth-card compact"><h2>帳號設定</h2><form class="stack-form" method="post" action="{{ url_for('account_username') }}"><label>勇者名稱<input name="username" maxlength="24" value="{{ profile.username }}" required></label><button class="primary-action">儲存名稱</button></form></section>{% else %}<section class="review-callout"><div><h2>目前是訪客模式</h2><p>註冊後可把現在的關卡、錯題與道具直接綁到帳號。</p></div><a class="primary-action" href="{{ url_for('register') }}">註冊並保留進度</a></section>{% endif %}
+{% endblock %}

@@ -1,0 +1,3 @@
+{% extends "base.html" %}{% block title %}登入 | WordQuest{% endblock %}{% block content %}
+<section class="auth-shell"><article class="auth-card"><p class="eyebrow">Welcome back</p><h1>登入 WordQuest</h1><p>登入後可以跨裝置保留關卡、錯題、熟練度與道具。</p><form class="stack-form" method="post"><label>Email<input type="email" name="email" autocomplete="email" required></label><label>密碼<input type="password" name="password" autocomplete="current-password" required></label><button class="primary-action" type="submit">登入</button></form><p class="auth-switch">還沒有帳號？<a href="{{ url_for('register') }}">建立帳號</a></p></article></section>
+{% endblock %}

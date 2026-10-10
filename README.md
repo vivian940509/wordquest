@@ -57,7 +57,14 @@ AI_MODEL=gpt-4o-mini
 
 ## Supabase Auth
 
-目前遊戲採 guest session，會為瀏覽器建立 WordQuest profile。`users_profile.auth_user_id`、`SUPABASE_URL`、`SUPABASE_ANON_KEY` 與 RLS policy 已預留；下一階段可加入 Email / Google 登入，把 guest profile 綁到 `auth.users`。
+目前已支援 Supabase Email / Password 註冊與登入：
+
+- 訪客可以先玩，註冊時會把目前 guest profile 綁到 `auth.users`，保留關卡、星星、錯題、熟練度、金幣與道具。
+- 登入後可從「我的帳號」查看學習統計與修改勇者名稱。
+- 導覽列會依登入狀態顯示登入 / 註冊或帳號 / 登出。
+- 登入狀態由 Flask 簽名 session 保存 30 天；Supabase 負責 Email/Password 身分驗證。
+
+若 Supabase 專案開啟 **Confirm email**，新使用者註冊後需先到信箱完成驗證再登入；若關閉則可註冊後直接登入。
 
 ## 測試
 
@@ -80,3 +87,8 @@ py -m compileall .
 - 關卡依作答速度與正確性保留 0–3 星最佳成績，地圖顯示章節完成率與累積星星。
 - 新增 `user_achievements`，成就首次解鎖會自動發放金幣。
 - Supabase 使用者請重新執行 `database/schema_supabase.sql`，其中 `CREATE TABLE IF NOT EXISTS` 與防重複 policy block 可安全補上新表。
+
+
+### 快速答題與手機發音
+- 一般題限時：初級 8 秒、中級 6 秒、高級 4 秒；語音題 8 秒。
+- 「聽發音」會優先播放字典 API 的真人音檔，無音檔時才使用瀏覽器 TTS，提升 Android 手機與內建瀏覽器相容性。

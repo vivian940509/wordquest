@@ -10,22 +10,38 @@
   <a class="primary-action" href="{{ url_for('battle',chapter=chapter.id,stage=stage_id,difficulty=difficulty) }}">開始練習</a>
 </section>
 
-<section class="study-grid">
+{% set battle_url = url_for('battle',chapter=chapter.id,stage=stage_id,difficulty=difficulty) %}
+
+<section class="lesson-carousel" data-lesson-carousel data-card-total="{{ words|length }}">
+  <div class="lesson-progress-head">
+    <strong data-lesson-counter>1 / {{ words|length }}</strong>
+    <div class="lesson-progress-bar" aria-hidden="true"><i data-lesson-progress style="width: {{ (100 / (words|length or 1))|round }}%"></i></div>
+  </div>
+  <div class="study-grid lesson-card-track">
   {% for item in words %}
-  <article class="study-card lesson-card">
+  <article class="study-card lesson-card" data-lesson-card data-card-index="{{ loop.index0 }}">
     <div>
       <p class="eyebrow">{{ item.pos }}</p>
       <h2>{{ item.word }}</h2>
       <strong>{{ item.zh }}</strong>
     </div>
-    <p>{{ item.context }}</p>
-    <small>{{ item.memory }}</small>
+    <div class="lesson-copy" data-expandable-copy>
+      <p>{{ item.context }}</p>
+      <small>{{ item.memory }}</small>
+    </div>
+    <button class="expand-button" type="button" data-expand-copy>展開</button>
     <div class="study-card-footer">
       <small>{{ item.example }}</small>
       <button class="sound-button" type="button" data-speak-word="{{ item.word }}">聽發音</button>
     </div>
   </article>
   {% endfor %}
+  </div>
+  <div class="lesson-mobile-actions">
+    <button class="secondary-action" type="button" data-lesson-prev hidden>← 上一個</button>
+    <button class="primary-action" type="button" data-lesson-next>下一個 →</button>
+    <a class="primary-action" href="{{ battle_url }}" data-lesson-start hidden>開始挑戰</a>
+  </div>
 </section>
 
 <section class="lesson-start-panel">
@@ -34,6 +50,6 @@
     <h2>練習時不會顯示中文提示</h2>
     <p>剛剛先學意思與發音，進入練習後要靠情境判斷英文。</p>
   </div>
-  <a class="primary-action" href="{{ url_for('battle',chapter=chapter.id,stage=stage_id,difficulty=difficulty) }}">開始練習</a>
+  <a class="primary-action" href="{{ battle_url }}">開始練習</a>
 </section>
 {% endblock %}

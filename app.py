@@ -1,15 +1,34 @@
-import os, time
+import os, time, requests
+from datetime import timedelta
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for, flash
 from battle_engine import build_battle, build_review_question, grade_answer, build_wrong_answer_analysis
-from database import (apply_battle_result, ensure_guest_profile, fetch_profile, fetch_vocabulary, fetch_stage_progress,
+from database import (apply_battle_result, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress,
                       fetch_daily, fetch_items, buy_item, has_item, create_challenge, fetch_challenge, touch_login, record_challenge_result, challenge_leaderboard,
                       claim_daily_mission, fetch_due_vocabulary, equip_item, unequip_item, fetch_recent_mistakes, clear_challenge_results, fetch_achievements, achievement_metrics)
 from dictionary_api import lookup_word
 from word_data import STARTER_WORDS, WORD_HINTS, CHAPTERS, DAILY_MISSIONS, SHOP_ITEMS, ACHIEVEMENTS
 from ai_teacher import explain as teacher_explain
 load_dotenv()
-app=Flask(__name__); app.config["SECRET_KEY"]=os.getenv("SECRET_KEY","dev-wordquest")
+app=Flask(__name__); app.config["SECRET_KEY"]=os.getenv("SECRET_KEY","dev-wordquest"); app.permanent_session_lifetime=timedelta(days=30)
+
+def supabase_auth_request(path, payload=None, access_token=None):
+    base=os.getenv("SUPABASE_URL","").rstrip("/"); key=os.getenv("SUPABASE_ANON_KEY","")
+    if not base or not key: return None, "尚未設定 SUPABASE_URL / SUPABASE_ANON_KEY"
+    headers={"apikey":key,"Content-Type":"application/json"}
+    if access_token: headers["Authorization"]=f"Bearer {access_token}"
+    try:
+        r=requests.post(f"{base}/auth/v1/{path}",json=payload or {},headers=headers,timeout=10)
+        data=r.json() if r.content else {}
+    except Exception:
+        return None, "登入服務暫時無法連線"
+    if not r.ok: return None, data.get("msg") or data.get("message") or data.get("error_description") or "帳號驗證失敗"
+    return data, None
+
+def question_time_limit(question):
+    # Keep rounds fast and game-like. Speech gets a little extra time for mic startup.
+    if question.get("mode")=="speech": return 8
+    return {"beginner":8,"intermediate":6,"advanced":4}.get(question.get("difficulty"),6)
 
 def current_user():
     if "user_id" not in session:
@@ -21,6 +40,52 @@ def enrich_dictionary(word,dictionary=None):
     dictionary=dictionary or {}; hint=WORD_HINTS.get(word,""); definition=dictionary.get("definition") or ""
     if "暫時無法連線字典 API" in definition or not definition: definition=hint or "先用遊戲內建情境練習。"
     return {"word":dictionary.get("word") or word,"phonetic":dictionary.get("phonetic") or "","audio":dictionary.get("audio") or "","definition":definition,"local_hint":hint}
+
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method=="POST":
+        email=request.form.get("email","").strip().lower(); password=request.form.get("password","")
+        data,err=supabase_auth_request("token?grant_type=password",{"email":email,"password":password})
+        if err: flash(err); return render_template("login.html")
+        user=data.get("user") or {}; guest_id=session.get("user_id")
+        profile=ensure_auth_profile(user.get("id"), (user.get("user_metadata") or {}).get("username") or email.split("@")[0], guest_id)
+        session["user_id"]=profile["id"]; session["auth_email"]=email; session.permanent=True
+        flash("登入成功，學習進度已同步。")
+        return redirect(url_for("index"))
+    return render_template("login.html")
+
+@app.route("/register", methods=["GET","POST"])
+def register():
+    if request.method=="POST":
+        username=request.form.get("username","").strip(); email=request.form.get("email","").strip().lower(); password=request.form.get("password","")
+        if len(password)<6: flash("密碼至少需要 6 個字元。") ; return render_template("register.html")
+        data,err=supabase_auth_request("signup",{"email":email,"password":password,"data":{"username":username or "勇者"}})
+        if err: flash(err); return render_template("register.html")
+        user=data.get("user") or {}; profile=ensure_auth_profile(user.get("id"),username or email.split("@")[0],session.get("user_id"))
+        session["user_id"]=profile["id"]
+        if data.get("access_token"):
+            session["auth_email"]=email; session.permanent=True; flash("註冊完成，原本的訪客進度已保留。")
+            return redirect(url_for("index"))
+        flash("註冊完成，請先到信箱完成 Email 驗證，再回來登入。")
+        return redirect(url_for("login"))
+    return render_template("register.html")
+
+@app.post("/logout")
+def logout():
+    session.clear(); flash("已登出。")
+    return redirect(url_for("index"))
+
+@app.get("/account")
+def account():
+    p=current_user(); vocab=fetch_vocabulary(p["id"]); progress=fetch_stage_progress(p["id"]); mistakes=fetch_recent_mistakes(p["id"],5)
+    stats={"words":len(vocab),"completed":sum(1 for x in progress.values() if x.get("completed")),"stars":sum(int(x.get("stars",0) or 0) for x in progress.values()),"mistakes":len(mistakes),"due":len(fetch_due_vocabulary(p["id"]))}
+    return render_template("account.html",profile=p,stats=stats,auth_email=session.get("auth_email"))
+
+@app.post("/account/username")
+def account_username():
+    if not session.get("auth_email"): flash("請先登入再修改名稱。") ; return redirect(url_for("login"))
+    flash("名稱已更新。" if update_username(current_user()["id"],request.form.get("username")) else "名稱不可為空。")
+    return redirect(url_for("account"))
 
 @app.get("/")
 def index():
@@ -35,7 +100,12 @@ def study(): return render_template("study.html",profile=current_user(),words=ST
 
 def stage_words(chapter, stage=None):
     words=[w for w in STARTER_WORDS if int(w.get("chapter",0))==int(chapter)]
-    return words
+    if not words:
+        return []
+    chapter_data=next((c for c in CHAPTERS if c["id"]==int(chapter)),None)
+    stage_ids=[s["id"] for s in chapter_data["stages"]] if chapter_data else []
+    stage_index=stage_ids.index(stage) if stage in stage_ids else 0
+    return [words[(stage_index+i)%len(words)] for i in range(min(5,len(words)))]
 
 @app.get("/map")
 def map_page():
@@ -71,7 +141,7 @@ def battle():
                 flash("先完成上一關才能挑戰這一關。"); return redirect(url_for("map_page"))
     round_no=max(1,min(5,request.args.get("round",1,type=int))); seed=(int(challenge["seed"])+round_no*9973) if challenge else int(time.time())
     q=build_battle(seed=seed,mistake_streak=int(session.get("mistake_streak",0)),difficulty=difficulty,chapter_id=chapter,stage_id=stage)
-    q["challenge_code"]=challenge_code if challenge else ""; q["challenge_round"]=round_no if challenge else 0
+    q["challenge_code"]=challenge_code if challenge else ""; q["challenge_round"]=round_no if challenge else 0; q["time_limit"]=question_time_limit(q)
     session["question"]=q; session["question_started_ms"]=int(time.time()*1000)
     return render_template("battle.html",profile=p,question=q)
 @app.post("/answer")
@@ -109,7 +179,7 @@ def review():
     if not due:
         flash("目前沒有到期錯題，先去闖新關卡！"); return redirect(url_for("vocabulary"))
     word=request.args.get("word") or due[0]["word"]
-    q=build_review_question(word,seed=int(time.time())); session["question"]=q; session["question_started_ms"]=int(time.time()*1000)
+    q=build_review_question(word,seed=int(time.time())); q["time_limit"]=question_time_limit(q); session["question"]=q; session["question_started_ms"]=int(time.time()*1000)
     return render_template("battle.html",profile=p,question=q)
 
 @app.post("/shop/equip/<item_key>")
@@ -121,6 +191,23 @@ def shop_equip(item_key):
 def shop_unequip():
     unequip_item(current_user()["id"]); flash("已卸下裝備。")
     return redirect(url_for("shop"))
+
+
+@app.get("/api/pronounce")
+def api_pronounce():
+    """Return a real dictionary audio URL when available.
+
+    This is used before browser TTS because mobile in-app browsers/WebViews
+    often expose speechSynthesis but do not actually produce sound.
+    """
+    word=(request.args.get("word") or "").strip()
+    if not word:
+        return jsonify({"audio":"","error":"缺少單字"}),400
+    item=lookup_word(word) or {}
+    audio=(item.get("audio") or "").strip()
+    if audio.startswith("//"):
+        audio="https:"+audio
+    return jsonify({"audio":audio,"phonetic":item.get("phonetic") or ""})
 
 @app.post("/api/teacher/explain")
 def api_teacher_explain():

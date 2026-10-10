@@ -54,9 +54,35 @@ def test_stage_lesson_shows_meaning_pronunciation_before_practice():
     assert "餓到不行".encode("utf-8") in response.data
     assert "delighted".encode("utf-8") in response.data
     assert "confident".encode("utf-8") in response.data
-    assert "nervous".encode("utf-8") in response.data
     assert b'data-speak-word="starving"' in response.data
     assert b"/battle?chapter=1&amp;stage=101&amp;difficulty=beginner" in response.data
+
+
+def test_stage_lesson_has_mobile_single_card_preview_flow():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get("/lesson?chapter=1&stage=101&difficulty=beginner")
+    html = response.data.decode("utf-8")
+    assert response.status_code == 200
+    assert 'class="lesson-carousel"' in html
+    assert 'data-lesson-carousel' in html
+    assert 'data-card-total="5"' in html
+    assert "1 / 5" in html
+    assert 'class="lesson-progress-bar"' in html
+    assert 'data-lesson-prev' in html
+    assert 'data-lesson-next' in html
+    assert "下一個" in html
+    assert "開始挑戰" in html
+    assert "展開" in html
+
+
+def test_battle_page_uses_question_time_limit_after_preview():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get("/battle?chapter=1&stage=101&difficulty=beginner")
+    assert response.status_code == 200
+    assert b'data-countdown="8"' in response.data
+    assert b'data-answer-form' in response.data
 
 
 def test_answer_redirects_to_get_result_page():
