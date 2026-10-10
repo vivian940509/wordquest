@@ -92,3 +92,19 @@ py -m compileall .
 ### 快速答題與手機發音
 - 一般題限時：初級 8 秒、中級 6 秒、高級 4 秒；語音題 8 秒。
 - 「聽發音」會優先播放字典 API 的真人音檔，無音檔時才使用瀏覽器 TTS，提升 Android 手機與內建瀏覽器相容性。
+
+## 2026-10-10 功能擴充
+
+WordQuest 現在包含完整 5 題關卡與結算、個人學習分析 Dashboard、Supabase 忘記密碼與 Google OAuth、弱點單字與進階錯題中心，以及自訂學習模式（錯題 / 弱點 / 未馴服 / 指定章節 / 10 題 / 30 題 / 無限）。
+
+### Supabase Auth 額外設定
+- 開啟 Google Provider 並填入 Google OAuth Client ID/Secret。
+- 在 Supabase Redirect URLs 加入：
+  - `https://你的網域/auth/google/callback`
+  - `https://你的網域/reset-password`
+- Google Cloud Console 的 Authorized redirect URI 要加入 Supabase 的 `/auth/v1/callback`。
+
+### 既有 Supabase 專案升級
+請在 SQL Editor 再執行 `database/schema_supabase.sql`。檔案底部包含安全的 `ADD COLUMN IF NOT EXISTS`，會加入：
+- `user_vocabulary.weak_word`
+- `user_vocabulary.last_wrong_at`

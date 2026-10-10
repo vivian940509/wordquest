@@ -2,7 +2,7 @@ import json, os, random, string, uuid
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, text
 from battle_engine import next_review_time
@@ -10,7 +10,7 @@ from word_data import ACHIEVEMENTS, CHAPTERS
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DATABASE_URL = f"sqlite:///{(BASE_DIR / 'database' / 'wordquest.local.db').as_posix()}"
-_initialized_sqlite_urls = set()
+_initialized_database_urls = set()
 APP_TZ = ZoneInfo(os.getenv("APP_TIMEZONE", "Asia/Taipei"))
 
 def app_today(): return datetime.now(APP_TZ).date()
@@ -29,22 +29,31 @@ def _build_engine(url):
 
 def get_engine(): return _build_engine(get_database_url())
 
-def _initialize_sqlite(engine):
+def _initialize_database(engine):
     url=str(engine.url)
-    if engine.dialect.name != "sqlite" or url in _initialized_sqlite_urls: return
-    schema=(BASE_DIR/"database"/"schema_sqlite.sql").read_text(encoding="utf-8")
+    if url in _initialized_database_urls: return
     with engine.begin() as c:
-        for stmt in [x.strip() for x in schema.split(";") if x.strip()]: c.execute(text(stmt))
-        # forward-compatible columns for older local db
-        cols={r[1] for r in c.execute(text("PRAGMA table_info(users_profile)")).all()}
-        for name, ddl in {"auth_user_id":"TEXT","streak_freezes":"INTEGER DEFAULT 0","unlocked_chapter":"INTEGER DEFAULT 1","equipped_gear":"TEXT DEFAULT ''","created_at":"TEXT"}.items():
-            if name not in cols: c.execute(text(f"ALTER TABLE users_profile ADD COLUMN {name} {ddl}"))
-        c.execute(text("UPDATE users_profile SET created_at=CURRENT_TIMESTAMP WHERE created_at IS NULL"))
-    _initialized_sqlite_urls.add(url)
+        if engine.dialect.name == "sqlite":
+            schema=(BASE_DIR/"database"/"schema_sqlite.sql").read_text(encoding="utf-8")
+            for stmt in [x.strip() for x in schema.split(";") if x.strip()]: c.execute(text(stmt))
+            # forward-compatible columns for older local db
+            cols={r[1] for r in c.execute(text("PRAGMA table_info(users_profile)")).all()}
+            for name, ddl in {"auth_user_id":"TEXT","streak_freezes":"INTEGER DEFAULT 0","unlocked_chapter":"INTEGER DEFAULT 1","equipped_gear":"TEXT DEFAULT ''","created_at":"TEXT"}.items():
+                if name not in cols: c.execute(text(f"ALTER TABLE users_profile ADD COLUMN {name} {ddl}"))
+            c.execute(text("UPDATE users_profile SET created_at=CURRENT_TIMESTAMP WHERE created_at IS NULL"))
+            vcols={r[1] for r in c.execute(text("PRAGMA table_info(user_vocabulary)")).all()}
+            if "weak_word" not in vcols: c.execute(text("ALTER TABLE user_vocabulary ADD COLUMN weak_word INTEGER DEFAULT 0"))
+            if "last_wrong_at" not in vcols: c.execute(text("ALTER TABLE user_vocabulary ADD COLUMN last_wrong_at TEXT"))
+            c.execute(text("UPDATE user_vocabulary SET weak_word=CASE WHEN mistake_count>=3 THEN 1 ELSE 0 END"))
+        elif engine.dialect.name.startswith("postgresql"):
+            c.execute(text("ALTER TABLE IF EXISTS public.user_vocabulary ADD COLUMN IF NOT EXISTS weak_word boolean NOT NULL DEFAULT false"))
+            c.execute(text("ALTER TABLE IF EXISTS public.user_vocabulary ADD COLUMN IF NOT EXISTS last_wrong_at timestamptz"))
+            c.execute(text("UPDATE public.user_vocabulary SET weak_word = (mistake_count >= 3) WHERE weak_word IS DISTINCT FROM (mistake_count >= 3)"))
+    _initialized_database_urls.add(url)
 
 @contextmanager
 def db_connection():
-    e=get_engine(); _initialize_sqlite(e)
+    e=get_engine(); _initialize_database(e)
     with e.begin() as c: yield c
 
 def ensure_guest_profile(user_id=None, username="勇者"):
@@ -108,13 +117,14 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
         if word:
             row=c.execute(text("SELECT proficiency_level,mistake_count FROM user_vocabulary WHERE user_id=:u AND word=:w"),{"u":user_id,"w":word}).mappings().first()
             was_review=bool(row and int(row.get("mistake_count",0) or 0)>0); old=int(row["proficiency_level"]) if row else 0; new=min(5, old+1) if correct else max(0, old-1); due=next_review_time(new if correct else 0).isoformat()
-            c.execute(text("""INSERT INTO user_vocabulary(user_id,word,proficiency_level,next_review_time,mistake_count,correct_count,last_seen_at)
-            VALUES(:u,:w,:p,:due,:m,:ok,CURRENT_TIMESTAMP) ON CONFLICT(user_id,word) DO UPDATE SET proficiency_level=:p,next_review_time=:due,mistake_count=user_vocabulary.mistake_count+:m,correct_count=user_vocabulary.correct_count+:ok,last_seen_at=CURRENT_TIMESTAMP"""),{"u":user_id,"w":word,"p":new,"due":due,"m":0 if correct else 1,"ok":1 if correct else 0})
+            c.execute(text("""INSERT INTO user_vocabulary(user_id,word,proficiency_level,next_review_time,mistake_count,correct_count,weak_word,last_wrong_at,last_seen_at)
+            VALUES(:u,:w,:p,:due,:m,:ok,:weak,:wrong_at,CURRENT_TIMESTAMP) ON CONFLICT(user_id,word) DO UPDATE SET proficiency_level=:p,next_review_time=:due,mistake_count=user_vocabulary.mistake_count+:m,correct_count=user_vocabulary.correct_count+:ok,last_wrong_at=CASE WHEN :m=1 THEN CURRENT_TIMESTAMP ELSE user_vocabulary.last_wrong_at END,last_seen_at=CURRENT_TIMESTAMP"""),{"u":user_id,"w":word,"p":new,"due":due,"m":0 if correct else 1,"ok":1 if correct else 0,"weak":False,"wrong_at":None if correct else datetime.now(timezone.utc).isoformat()})
+            c.execute(text("UPDATE user_vocabulary SET weak_word=CASE WHEN mistake_count>=3 THEN :yes ELSE :no END WHERE user_id=:u AND word=:w"),{"yes":True,"no":False,"u":user_id,"w":word})
         if question:
             c.execute(text("""INSERT INTO answer_history(user_id,chapter_id,stage_id,difficulty,mode,prompt,selected_answer,correct_answer,is_correct,response_ms,speech_score)
             VALUES(:u,:ch,:st,:d,:mo,:p,:s,:a,:ok,:ms,:ss)"""),{"u":user_id,"ch":question.get("chapter_id"),"st":question.get("stage_id"),"d":question.get("difficulty"),"mo":question.get("mode"),"p":question.get("prompt"),"s":selected,"a":question.get("answer"),"ok":bool(correct),"ms":response_ms,"ss":speech_score})
             st=question.get("stage_id")
-            if st:
+            if st and not question.get("defer_stage_progress"):
                 limit_ms=max(1000,int(question.get("time_limit",12))*1000)
                 stars=(3 if response_ms and response_ms<=limit_ms*0.4 else 2 if response_ms and response_ms<=limit_ms*0.75 else 1) if correct else 0
                 score=max(40,100-min(int(response_ms/max(limit_ms/35,1)),35)) if correct else 0
@@ -134,7 +144,7 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
 
 def fetch_vocabulary(user_id):
     with db_connection() as c:
-        rows=c.execute(text("SELECT word,proficiency_level,next_review_time,mistake_count,correct_count,last_seen_at FROM user_vocabulary WHERE user_id=:u ORDER BY last_seen_at DESC"),{"u":user_id}).mappings().all(); return [dict(x) for x in rows]
+        rows=c.execute(text("SELECT word,proficiency_level,next_review_time,mistake_count,correct_count,weak_word,last_wrong_at,last_seen_at FROM user_vocabulary WHERE user_id=:u ORDER BY last_seen_at DESC"),{"u":user_id}).mappings().all(); return [dict(x) for x in rows]
 
 def fetch_stage_progress(user_id):
     with db_connection() as c:
@@ -217,7 +227,7 @@ def fetch_due_vocabulary(user_id, limit=20):
     # while PostgreSQL timestamptz values continue to work unchanged.
     now=datetime.now(timezone.utc)
     with db_connection() as c:
-        rows=c.execute(text("""SELECT word,proficiency_level,next_review_time,mistake_count,correct_count,last_seen_at
+        rows=c.execute(text("""SELECT word,proficiency_level,next_review_time,mistake_count,correct_count,weak_word,last_wrong_at,last_seen_at
             FROM user_vocabulary WHERE user_id=:u AND mistake_count>0
             ORDER BY next_review_time ASC"""),{"u":user_id}).mappings().all()
     due=[]
@@ -282,3 +292,56 @@ def fetch_recent_mistakes(user_id, limit=10):
             FROM answer_history WHERE user_id=:u AND is_correct=:wrong
             ORDER BY created_at DESC LIMIT :lim"""),{"u":user_id,"wrong":False,"lim":limit}).mappings().all()
         return [dict(x) for x in rows]
+
+
+def record_stage_completion(user_id, stage_id, stars, score, completed=True):
+    """Commit one campaign run to stage progress exactly once at run completion."""
+    if not stage_id: return
+    with db_connection() as c:
+        c.execute(text("""INSERT INTO stage_progress(user_id,stage_id,stars,best_score,completed,attempts) VALUES(:u,:s,:stars,:score,:done,1)
+        ON CONFLICT(user_id,stage_id) DO UPDATE SET stars=CASE WHEN stage_progress.stars>:stars THEN stage_progress.stars ELSE :stars END,
+        best_score=CASE WHEN stage_progress.best_score>:score THEN stage_progress.best_score ELSE :score END,
+        completed=(stage_progress.completed OR :done),attempts=stage_progress.attempts+1,updated_at=CURRENT_TIMESTAMP"""),
+        {"u":user_id,"s":stage_id,"stars":max(0,min(3,int(stars))),"score":int(score),"done":bool(completed)})
+        if completed and int(stage_id)%100==len(next((c0["stages"] for c0 in CHAPTERS if c0["id"]==int(stage_id)//100), [])):
+            next_ch=min(len(CHAPTERS),int(stage_id)//100+1)
+            c.execute(text("UPDATE users_profile SET unlocked_chapter=CASE WHEN unlocked_chapter>:n THEN unlocked_chapter ELSE :n END WHERE id=:u"),{"n":next_ch,"u":user_id})
+    return refresh_achievements(user_id)
+
+
+def fetch_learning_analytics(user_id):
+    """Aggregate dashboard metrics from answer history without duplicating stored state."""
+    with db_connection() as c:
+        overall=c.execute(text("""SELECT COUNT(*) attempts, COALESCE(SUM(CASE WHEN is_correct THEN 1 ELSE 0 END),0) correct,
+            COALESCE(AVG(CASE WHEN response_ms>0 THEN response_ms END),0) avg_ms FROM answer_history WHERE user_id=:u"""),{"u":user_id}).mappings().first()
+        by_diff=c.execute(text("""SELECT difficulty,COUNT(*) attempts,COALESCE(SUM(CASE WHEN is_correct THEN 1 ELSE 0 END),0) correct
+            FROM answer_history WHERE user_id=:u GROUP BY difficulty"""),{"u":user_id}).mappings().all()
+        top=c.execute(text("""SELECT word,mistake_count,correct_count,weak_word,last_wrong_at FROM user_vocabulary
+            WHERE user_id=:u AND mistake_count>0 ORDER BY mistake_count DESC,last_wrong_at DESC LIMIT 5"""),{"u":user_id}).mappings().all()
+        daily=c.execute(text("""SELECT to_char(created_at,'YYYY-MM-DD') day,COUNT(*) attempts,COALESCE(SUM(CASE WHEN is_correct THEN 1 ELSE 0 END),0) correct
+            FROM answer_history WHERE user_id=:u AND created_at >= CURRENT_TIMESTAMP - INTERVAL '6 days' GROUP BY to_char(created_at,'YYYY-MM-DD') ORDER BY day""") if c.dialect.name=='postgresql' else text("""SELECT date(created_at) day,COUNT(*) attempts,COALESCE(SUM(CASE WHEN is_correct THEN 1 ELSE 0 END),0) correct
+            FROM answer_history WHERE user_id=:u AND datetime(created_at) >= datetime('now','-6 days') GROUP BY date(created_at) ORDER BY day"""),{"u":user_id}).mappings().all()
+    attempts=int(overall.get('attempts',0) or 0); correct=int(overall.get('correct',0) or 0)
+    diffs={r['difficulty']:{'attempts':int(r['attempts']), 'correct':int(r['correct']), 'accuracy':round(100*int(r['correct'])/max(int(r['attempts']),1))} for r in by_diff if r.get('difficulty')}
+    raw_daily={str(r['day']):dict(r) for r in daily}
+    days=[]
+    today=app_today()
+    for offset in range(6,-1,-1):
+        key=(today-timedelta(days=offset)).isoformat(); row=raw_daily.get(key,{})
+        days.append({'day':key,'attempts':int(row.get('attempts',0) or 0),'correct':int(row.get('correct',0) or 0)})
+    return {'attempts':attempts,'correct':correct,'accuracy':round(100*correct/max(attempts,1)) if attempts else 0,'avg_seconds':round(float(overall.get('avg_ms',0) or 0)/1000,1),'difficulty':diffs,'top_missed':[dict(r) for r in top],'daily':days}
+
+
+def fetch_mistake_words(user_id, sort='recent', weak_only=False, limit=100):
+    order='mistake_count DESC, last_wrong_at DESC' if sort=='count' else 'last_wrong_at DESC, mistake_count DESC'
+    with db_connection() as c:
+        rows=c.execute(text(f"""SELECT word,proficiency_level,mistake_count,correct_count,weak_word,last_wrong_at,next_review_time
+            FROM user_vocabulary WHERE user_id=:u AND mistake_count>0 {'AND weak_word=:weak' if weak_only else ''}
+            ORDER BY {order} LIMIT :lim"""),({'u':user_id,'weak':True,'lim':limit} if weak_only else {'u':user_id,'lim':limit})).mappings().all()
+    return [dict(r) for r in rows]
+
+
+def fetch_unmastered_words(user_id, limit=200):
+    with db_connection() as c:
+        rows=c.execute(text("SELECT word FROM user_vocabulary WHERE user_id=:u AND proficiency_level<5 ORDER BY proficiency_level ASC,last_seen_at ASC LIMIT :lim"),{'u':user_id,'lim':limit}).all()
+    return [r[0] for r in rows]

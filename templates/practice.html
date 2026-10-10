@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}自訂學習 | WordQuest{% endblock %}{% block content %}
+<section class="page-heading"><p class="eyebrow">Custom Training</p><h1>自訂學習模式</h1><p>今天想練什麼，由你決定。</p></section>
+<form class="practice-form" method="post" action="{{ url_for('practice_start') }}">
+  <div class="practice-mode-grid">
+    <label><input type="radio" name="mode" value="wrong" required><span>🔁 只練錯題<small>把曾經答錯的單字重新打贏</small></span></label>
+    <label><input type="radio" name="mode" value="weak"><span>⚠️ 只練弱點<small>答錯 3 次以上 · 現有 {{ weak_count }} 個</small></span></label>
+    <label><input type="radio" name="mode" value="unmastered"><span>🐣 未馴服單字<small>熟練度還沒到 5 星</small></span></label>
+    <label><input type="radio" name="mode" value="chapter"><span>📚 指定章節<small>集中練同一學習階段</small></span></label>
+    <label><input type="radio" name="mode" value="quick10" checked><span>⚡ 10 題快速練習<small>短時間完成一輪</small></span></label>
+    <label><input type="radio" name="mode" value="challenge30"><span>🏆 30 題挑戰<small>完整耐力訓練</small></span></label>
+    <label><input type="radio" name="mode" value="infinite"><span>♾️ 無限模式<small>想停再停，保留本次統計</small></span></label>
+  </div>
+  <div class="practice-options"><label>難度<select name="difficulty"><option value="beginner">初級 · 8 秒</option><option value="intermediate" selected>中級 · 6 秒</option><option value="advanced">高級 · 4 秒</option></select></label><label>章節<select name="chapter">{% for c in chapters %}<option value="{{ c.id }}">{{ c.icon }} {{ c.title }}</option>{% endfor %}</select></label></div>
+  <button class="primary-action" type="submit">開始練習</button>
+</form>
+{% endblock %}

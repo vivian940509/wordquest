@@ -13,7 +13,8 @@ create table if not exists public.user_vocabulary (
   id bigserial primary key, user_id uuid not null references public.users_profile(id) on delete cascade,
   word text not null, proficiency_level int not null default 0 check (proficiency_level between 0 and 5),
   next_review_time timestamptz not null default now(), mistake_count int not null default 0,
-  correct_count int not null default 0, last_seen_at timestamptz not null default now(), unique(user_id, word)
+  correct_count int not null default 0, weak_word boolean not null default false, last_wrong_at timestamptz,
+  last_seen_at timestamptz not null default now(), unique(user_id, word)
 );
 create table if not exists public.answer_history (
   id bigserial primary key, user_id uuid not null references public.users_profile(id) on delete cascade,
@@ -97,3 +98,9 @@ do $$ begin
   using (user_id in (select id from public.users_profile where auth_user_id = auth.uid()))
   with check (user_id in (select id from public.users_profile where auth_user_id = auth.uid()));
 exception when duplicate_object then null; end $$;
+
+
+-- Safe migration for existing projects
+alter table public.user_vocabulary add column if not exists weak_word boolean not null default false;
+alter table public.user_vocabulary add column if not exists last_wrong_at timestamptz;
+update public.user_vocabulary set weak_word = (mistake_count >= 3);

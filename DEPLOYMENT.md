@@ -70,3 +70,12 @@ SUPABASE_ANON_KEY=
 ## 6. Deploy
 
 After setting the environment variables, deploy the Vercel project. If you later change code, push to GitHub and Vercel will redeploy automatically.
+
+## Google OAuth / Password reset
+After deployment, add the production URLs to Supabase Authentication > URL Configuration > Redirect URLs:
+- `https://<your-domain>/auth/google/callback`
+- `https://<your-domain>/reset-password`
+
+Enable the Google provider in Supabase. In Google Cloud, the authorized OAuth callback must be the Supabase callback URL shown by the provider settings (normally `https://<project-ref>.supabase.co/auth/v1/callback`).
+
+If upgrading an existing database, run the latest `database/schema_supabase.sql` once to add the weak-word fields used by the upgraded mistake center.

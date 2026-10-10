@@ -149,3 +149,68 @@
 - 改善手機「聽發音」：按下按鈕時優先取得字典真人語音檔播放；若沒有音檔，再退回瀏覽器 TTS。
 - Android / 內建 WebView 若 speechSynthesis 有介面但無聲音，不再只依賴它。
 - 播放失敗時，按鈕會提示檢查手機媒體音量。
+
+## 2026-10-10 — 六大功能擴充
+
+### 1. 一般關卡改為 5 題完整流程
+- 一般 stage 現在固定 5 題，題目頁會顯示「第 n/5 題」進度。
+- 每題仍使用現有難度倒數：初級 8 秒、中級 6 秒、高級 4 秒、語音 8 秒。
+- 關卡完成後才一次寫入 stage progression，避免單題答對就直接通關。
+- POST /answer 會消耗當前 question session，避免重新整理/重送造成重複獎勵。
+
+### 2. 關卡結算頁
+新增 `/level-summary`：
+- 正確率、平均答題時間、星星、EXP、金幣、關卡分數。
+- 本關錯題與最弱單字。
+- 再挑戰一次與回地圖。
+
+### 3. 個人學習 Dashboard
+`/account` 新增：
+- 最近 7 天答題數。
+- 總正確率、平均答題時間、總答題數。
+- 最容易錯的 5 個單字。
+- 初級/中級/高級正確率。
+- 7 天學習連續圖與目前 streak。
+
+### 4. 忘記密碼 + Google 登入
+新增：
+- `/forgot-password`
+- `/reset-password`
+- `/login/google`
+- `/auth/google/callback`
+- `/auth/google/complete`
+
+Supabase 後台需另外設定：
+1. Authentication > Providers > Google 啟用 Google provider，填入 Google OAuth Client ID / Secret。
+2. Authentication > URL Configuration 將正式網址加入 Redirect URLs，例如：
+   - `https://wordquest-sandy-gamma.vercel.app/auth/google/callback`
+   - `https://wordquest-sandy-gamma.vercel.app/reset-password`
+3. Google Cloud OAuth Authorized redirect URI 需包含 Supabase 提供的 callback URL（通常為 `https://<project-ref>.supabase.co/auth/v1/callback`）。
+
+### 5. 錯題中心升級
+- `user_vocabulary` 新增 `weak_word`、`last_wrong_at`。
+- 累積答錯達 3 次會自動成為弱點單字。
+- 錯題中心可切換「最近又錯 / 最常錯 / 弱點單字」。
+- 新增「一鍵只練弱點」。
+
+### 6. 自訂學習模式
+新增 `/practice`：
+- 只練錯題。
+- 只練弱點。
+- 只練未馴服單字（包含尚未練過的字）。
+- 指定章節。
+- 10 題快速練習。
+- 30 題挑戰。
+- 無限模式，可隨時結束並查看本次統計。
+
+### 資料庫更新
+- SQLite 會自動補上 `weak_word` 與 `last_wrong_at` 欄位。
+- Supabase/PostgreSQL 請重新執行 `database/schema_supabase.sql` 最後的 migration 段落。
+
+## 手機發音穩定性修正（2026-10-10）
+- 發音改成瀏覽器只播放同源 `/api/pronounce/audio`，不再直接連第三方音檔網址。
+- 後端發音來源依序為：字典真人音檔 → Google TTS；會驗證回應狀態、內容大小與音訊 Content-Type。
+- 音訊成功後加上 CDN/瀏覽器快取標頭，降低同一單字重複抓取失敗機率。
+- 手機點擊時直接建立 Audio 並呼叫 `play()`，避免等待 `fetch()` 後失去 iOS/Android 的 user-gesture 播放權限。
+- 遠端音訊失敗後再退回 Web Speech API，會等待 voices、優先 en-US/en-GB、取消舊朗讀並避免重疊播放。
+- 新增載入、切換備援、完全失敗等按鈕狀態。

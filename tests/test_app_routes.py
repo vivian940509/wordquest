@@ -96,14 +96,15 @@ def test_pronounce_falls_back_to_same_origin_tts_when_dictionary_has_no_audio(mo
         response = client.get("/api/pronounce?word=starving")
 
     assert response.status_code == 200
-    assert response.get_json()["audio"] == "/api/tts?word=starving"
+    assert response.get_json()["audio"] == "/api/pronounce/audio?word=starving"
 
 
 def test_tts_proxy_returns_same_origin_audio(monkeypatch):
     app.config["TESTING"] = True
 
     class FakeTtsResponse:
-        content = b"mp3-bytes"
+        ok = True
+        content = b"x" * 300
         headers = {"Content-Type": "audio/mpeg"}
 
         def raise_for_status(self):
@@ -119,7 +120,7 @@ def test_tts_proxy_returns_same_origin_audio(monkeypatch):
         response = client.get("/api/tts?word=starving")
 
     assert response.status_code == 200
-    assert response.data == b"mp3-bytes"
+    assert response.data == b"x" * 300
     assert response.content_type == "audio/mpeg"
 
 
@@ -210,3 +211,60 @@ def test_styles_include_game_motion():
     assert "@keyframes monsterFloat" in css
     assert "@keyframes rewardPop" in css
     assert "prefers-reduced-motion" in css
+
+
+def test_custom_practice_page_lists_all_requested_modes():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get("/practice")
+    html=response.data.decode("utf-8")
+    assert response.status_code == 200
+    for text in ["只練錯題","只練弱點","未馴服單字","指定章節","10 題快速練習","30 題挑戰","無限模式"]:
+        assert text in html
+
+
+def test_forgot_password_and_google_login_controls_exist():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response=client.get("/login")
+    html=response.data.decode("utf-8")
+    assert "忘記密碼" in html
+    assert "使用 Google 登入" in html
+
+
+def test_campaign_battle_has_five_question_progress():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response=client.get("/battle?chapter=1&stage=101&difficulty=beginner&restart=1")
+    html=response.data.decode("utf-8")
+    assert response.status_code == 200
+    assert "第 1/5 題" in html
+    assert 'data-countdown="8"' in html
+
+
+def test_pronounce_audio_falls_back_to_google_when_dictionary_audio_fails(monkeypatch):
+    app.config["TESTING"] = True
+
+    monkeypatch.setattr("app.lookup_word", lambda word: {"word": word, "phonetic": "", "audio": "https://bad.example/audio.mp3"})
+
+    class BadResponse:
+        ok = False
+        content = b""
+        headers = {}
+
+    class GoodResponse:
+        ok = True
+        content = b"x" * 300
+        headers = {"Content-Type": "audio/mpeg"}
+
+    def fake_get(url, headers=None, timeout=None):
+        return BadResponse() if "bad.example" in url else GoodResponse()
+
+    monkeypatch.setattr("app.requests.get", fake_get)
+    with app.test_client() as client:
+        response = client.get("/api/pronounce/audio?word=starving")
+
+    assert response.status_code == 200
+    assert response.mimetype == "audio/mpeg"
+    assert response.headers["X-Pronunciation-Source"] == "google-tts"
+    assert "s-maxage" in response.headers["Cache-Control"]

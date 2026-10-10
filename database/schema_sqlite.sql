@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS users_profile (
 CREATE TABLE IF NOT EXISTS user_vocabulary (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, word TEXT NOT NULL,
     proficiency_level INTEGER DEFAULT 0, next_review_time TEXT DEFAULT CURRENT_TIMESTAMP,
-    mistake_count INTEGER DEFAULT 0, correct_count INTEGER DEFAULT 0, last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    mistake_count INTEGER DEFAULT 0, correct_count INTEGER DEFAULT 0, weak_word INTEGER DEFAULT 0, last_wrong_at TEXT, last_seen_at TEXT DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, word)
 );
 CREATE TABLE IF NOT EXISTS answer_history (

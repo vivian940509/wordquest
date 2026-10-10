@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block title %}練習結算 | WordQuest{% endblock %}{% block content %}
+<section class="summary-hero"><p class="eyebrow">Training Summary</p><h1>本次練習完成</h1><p>{{ summary.correct }}/{{ summary.attempts }} 答對 · 正確率 {{ summary.accuracy }}%</p></section>
+<section class="summary-grid"><article><strong>{{ summary.avg_seconds }}s</strong><span>平均答題時間</span></article><article><strong>+{{ summary.exp }}</strong><span>EXP</span></article><article><strong>+{{ summary.coins }}</strong><span>金幣</span></article><article><strong>{{ summary.wrong|length }}</strong><span>本次錯題</span></article></section>
+{% if summary.weakest %}<section class="summary-panel"><h2>最需要再練</h2><p class="weakest-callout">⚠️ <strong>{{ summary.weakest }}</strong></p></section>{% endif %}
+<div class="actions"><a class="primary-action" href="{{ url_for('practice') }}">選擇下一種練習</a><a class="secondary-action" href="{{ url_for('mistakes') }}">查看錯題中心</a></div>
+{% endblock %}

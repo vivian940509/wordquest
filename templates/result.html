@@ -68,6 +68,12 @@
     {% if question.challenge_code %}
       {% if question.challenge_round < 5 %}<a class="primary-action" href="{{ url_for('battle',chapter=question.chapter_id,stage=question.stage_id or '',difficulty=question.difficulty,challenge=question.challenge_code,round=question.challenge_round+1) }}">下一題（{{ question.challenge_round+1 }}/5）</a>
       {% else %}<a class="primary-action" href="{{ url_for('friends',code=question.challenge_code) }}">查看挑戰排行榜</a>{% endif %}
+    {% elif question.campaign_mode %}
+      <a class="primary-action" href="{{ url_for('battle',chapter=question.chapter_id,stage=question.stage_id,difficulty=question.difficulty) }}">下一題（{{ question.campaign_round+1 }}/5）</a>
+      <a class="secondary-action" href="{{ url_for('map_page') }}">稍後再挑戰</a>
+    {% elif question.practice_mode %}
+      <a class="primary-action" href="{{ url_for('practice_battle') }}">下一題{% if question.practice_total %}（{{ question.practice_round+1 }}/{{ question.practice_total }}）{% endif %}</a>
+      <form method="post" action="{{ url_for('practice_exit') }}"><button class="secondary-action" type="submit">結束並查看統計</button></form>
     {% elif question.is_review %}
       <a class="primary-action" href="{{ url_for('review') }}">下一個錯題</a><a class="secondary-action" href="{{ url_for('mistakes') }}">回錯題中心</a>
     {% else %}
