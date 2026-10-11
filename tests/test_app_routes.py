@@ -101,6 +101,7 @@ def test_pronounce_falls_back_to_same_origin_tts_when_dictionary_has_no_audio(mo
 
 def test_tts_proxy_returns_same_origin_audio(monkeypatch):
     app.config["TESTING"] = True
+    app.config["PRONUNCIATION_CACHE"].clear()
 
     class FakeTtsResponse:
         ok = True
@@ -244,6 +245,7 @@ def test_campaign_battle_has_five_question_progress():
 
 def test_pronounce_audio_falls_back_to_google_when_dictionary_audio_fails(monkeypatch):
     app.config["TESTING"] = True
+    app.config["PRONUNCIATION_CACHE"].clear()
 
     monkeypatch.setattr("app.lookup_word", lambda word: {"word": word, "phonetic": "", "audio": "https://bad.example/audio.mp3"})
 
@@ -268,3 +270,77 @@ def test_pronounce_audio_falls_back_to_google_when_dictionary_audio_fails(monkey
     assert response.mimetype == "audio/mpeg"
     assert response.headers["X-Pronunciation-Source"] == "google-tts"
     assert "s-maxage" in response.headers["Cache-Control"]
+
+
+def test_pronounce_audio_uses_fast_timeouts(monkeypatch):
+    app.config["TESTING"] = True
+    app.config["PRONUNCIATION_CACHE"].clear()
+    observed_lookup_timeouts = []
+    observed_audio_timeouts = []
+
+    def fake_lookup(word, timeout=None):
+        observed_lookup_timeouts.append(timeout)
+        return {"word": word, "phonetic": "", "audio": "https://bad.example/audio.mp3"}
+
+    class BadResponse:
+        ok = False
+        content = b""
+        headers = {}
+
+    class GoodResponse:
+        ok = True
+        content = b"x" * 300
+        headers = {"Content-Type": "audio/mpeg"}
+
+    def fake_get(url, headers=None, timeout=None):
+        observed_audio_timeouts.append(timeout)
+        return BadResponse() if "bad.example" in url else GoodResponse()
+
+    monkeypatch.setattr("app.lookup_word", fake_lookup)
+    monkeypatch.setattr("app.requests.get", fake_get)
+    with app.test_client() as client:
+        response = client.get("/api/pronounce/audio?word=starving")
+
+    assert response.status_code == 200
+    assert observed_lookup_timeouts
+    assert observed_audio_timeouts
+    assert all(timeout is not None and timeout <= 1.2 for timeout in observed_lookup_timeouts)
+    assert all(timeout is not None and timeout <= 1.2 for timeout in observed_audio_timeouts)
+
+
+def test_pronounce_audio_serves_cached_success_without_external_calls(monkeypatch):
+    app.config["TESTING"] = True
+    app.config["PRONUNCIATION_CACHE"].clear()
+    calls = {"lookup": 0, "audio": 0}
+
+    def fake_lookup(word, timeout=None):
+        calls["lookup"] += 1
+        return {"word": word, "phonetic": "", "audio": ""}
+
+    class GoodResponse:
+        ok = True
+        content = b"cached-audio" * 30
+        headers = {"Content-Type": "audio/mpeg"}
+
+    def fake_get(url, headers=None, timeout=None):
+        calls["audio"] += 1
+        return GoodResponse()
+
+    monkeypatch.setattr("app.lookup_word", fake_lookup)
+    monkeypatch.setattr("app.requests.get", fake_get)
+    with app.test_client() as client:
+        first = client.get("/api/pronounce/audio?word=starving")
+        second = client.get("/api/pronounce/audio?word=starving")
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.data == first.data
+    assert calls == {"lookup": 1, "audio": 1}
+
+
+def test_frontend_pronunciation_falls_back_within_two_seconds():
+    js = (Path(app.root_path) / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "PRONUNCIATION_AUDIO_START_TIMEOUT_MS=1500" in js
+    assert "audio timeout" in js
+    assert "7000" not in js

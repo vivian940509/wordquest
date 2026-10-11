@@ -12,6 +12,12 @@ from word_data import STARTER_WORDS, WORD_HINTS, CHAPTERS, DAILY_MISSIONS, SHOP_
 from ai_teacher import explain as teacher_explain
 load_dotenv()
 app=Flask(__name__); app.config["SECRET_KEY"]=os.getenv("SECRET_KEY","dev-wordquest"); app.permanent_session_lifetime=timedelta(days=30)
+app.config.setdefault("PRONUNCIATION_CACHE", {})
+
+PRONUNCIATION_PROXY_BUDGET_SECONDS = 1.8
+PRONUNCIATION_LOOKUP_TIMEOUT_SECONDS = 0.6
+PRONUNCIATION_AUDIO_TIMEOUT_SECONDS = 0.8
+PRONUNCIATION_CACHE_SECONDS = 86400
 
 def supabase_auth_request(path, payload=None, access_token=None):
     base=os.getenv("SUPABASE_URL","").rstrip("/"); key=os.getenv("SUPABASE_ANON_KEY","")
@@ -348,6 +354,33 @@ def _valid_audio_response(response):
     content_type=(response.headers.get("Content-Type") or "").lower()
     return response.ok and len(response.content or b"") > 256 and ("audio" in content_type or "mpeg" in content_type or "mp3" in content_type or "octet-stream" in content_type)
 
+def _remaining_timeout(deadline, cap):
+    remaining=max(0.05,deadline-time.monotonic())
+    return min(cap,remaining)
+
+def _pronunciation_cache_key(word):
+    return (word or "").strip().lower()
+
+def _get_cached_pronunciation(word):
+    cache=app.config.setdefault("PRONUNCIATION_CACHE",{})
+    cached=cache.get(_pronunciation_cache_key(word))
+    if not cached:
+        return None
+    if cached["expires_at"]<=time.time():
+        cache.pop(_pronunciation_cache_key(word),None)
+        return None
+    return cached
+
+def _set_cached_pronunciation(word,content,content_type,source):
+    app.config.setdefault("PRONUNCIATION_CACHE",{})[_pronunciation_cache_key(word)]={"content":content,"content_type":content_type,"source":source,"expires_at":time.time()+PRONUNCIATION_CACHE_SECONDS}
+
+def _lookup_pronunciation_word(word,deadline):
+    timeout=_remaining_timeout(deadline,PRONUNCIATION_LOOKUP_TIMEOUT_SECONDS)
+    try:
+        return lookup_word(word,timeout=timeout) or {}
+    except TypeError:
+        return lookup_word(word) or {}
+
 def _audio_response(content, content_type="audio/mpeg", source="fallback"):
     response=Response(content,mimetype=(content_type or "audio/mpeg").split(";")[0])
     # Stable same-origin URL lets browsers/Vercel cache successful pronunciation bytes.
@@ -380,23 +413,30 @@ def api_pronounce_audio():
     if not word:
         return jsonify({"error":"缺少單字"}),400
 
+    cached=_get_cached_pronunciation(word)
+    if cached:
+        return _audio_response(cached["content"],cached["content_type"],cached["source"])
+
+    deadline=time.monotonic()+PRONUNCIATION_PROXY_BUDGET_SECONDS
     headers={"User-Agent":"Mozilla/5.0 (WordQuest pronunciation)","Accept":"audio/mpeg,audio/*;q=0.9,*/*;q=0.1"}
-    item=lookup_word(word) or {}
+    item=_lookup_pronunciation_word(word,deadline)
     dictionary_audio=(item.get("audio") or "").strip()
     if dictionary_audio.startswith("//"):
         dictionary_audio="https:"+dictionary_audio
     if dictionary_audio.startswith("https://"):
         try:
-            r=requests.get(dictionary_audio,headers=headers,timeout=5)
+            r=requests.get(dictionary_audio,headers=headers,timeout=_remaining_timeout(deadline,PRONUNCIATION_AUDIO_TIMEOUT_SECONDS))
             if _valid_audio_response(r):
+                _set_cached_pronunciation(word,r.content,r.headers.get("Content-Type") or "audio/mpeg","dictionary")
                 return _audio_response(r.content,r.headers.get("Content-Type") or "audio/mpeg","dictionary")
         except Exception:
             pass
 
     google_url=f"https://translate.google.com/translate_tts?ie=UTF-8&q={quote(word)}&tl=en&client=tw-ob"
     try:
-        r=requests.get(google_url,headers=headers,timeout=7)
+        r=requests.get(google_url,headers=headers,timeout=_remaining_timeout(deadline,PRONUNCIATION_AUDIO_TIMEOUT_SECONDS))
         if _valid_audio_response(r):
+            _set_cached_pronunciation(word,r.content,r.headers.get("Content-Type") or "audio/mpeg","google-tts")
             return _audio_response(r.content,r.headers.get("Content-Type") or "audio/mpeg","google-tts")
     except Exception:
         pass

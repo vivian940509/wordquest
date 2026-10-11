@@ -7,6 +7,7 @@ if(speechButton){const target=speechButton.dataset.speechTarget||'';const speech
 let activePronunciationAudio=null;
 let activeSpeechUtterance=null;
 const pronunciationFailures=new Map();
+const PRONUNCIATION_AUDIO_START_TIMEOUT_MS=1500;
 
 const waitForVoices=()=>new Promise(resolve=>{
   if(!('speechSynthesis' in window)){resolve([]);return}
@@ -66,7 +67,7 @@ const playSameOriginAudio=(word)=>new Promise((resolve,reject)=>{
   audio.src=url;
   const playPromise=audio.play();
   if(playPromise?.catch)playPromise.catch(err=>finish(false,err));
-  setTimeout(()=>{if(!settled&&audio.paused&&audio.readyState<2)finish(false,new Error('audio timeout'))},7000);
+  setTimeout(()=>{if(!settled&&audio.readyState<2)finish(false,new Error('audio timeout'))},PRONUNCIATION_AUDIO_START_TIMEOUT_MS);
 });
 
 const playPronunciation=async(btn)=>{
