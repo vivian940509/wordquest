@@ -186,7 +186,7 @@ def test_battle_page_uses_question_time_limit_after_preview():
     with app.test_client() as client:
         response = client.get("/battle?chapter=1&stage=101&difficulty=beginner")
     assert response.status_code == 200
-    assert b'data-countdown="8"' in response.data
+    assert b'data-countdown="5"' in response.data
     assert b'data-answer-form' in response.data
     assert b'data-correct-answer=' in response.data
 
@@ -445,7 +445,7 @@ def test_campaign_battle_uses_stage_word_count_progress():
     html=response.data.decode("utf-8")
     assert response.status_code == 200
     assert "第 1/10 題" in html
-    assert 'data-countdown="8"' in html
+    assert 'data-countdown="5"' in html
 
 
 def test_campaign_continues_until_stage_word_count():
@@ -632,7 +632,8 @@ def test_frontend_answer_submit_shows_immediate_feedback():
     assert "dataset.correctAnswer" in js
     assert "answer-correct" in js
     assert "answer-wrong" in js
-    assert "setTimeout(()=>form.submit()" in js
+    assert "form.submit();return" in js
+    assert "setTimeout(()=>form.submit()" not in js
     assert "form.addEventListener('submit'" in js
     assert "form.querySelectorAll('button').forEach" in js
     assert "hiddenSelected.name='selected'" in js

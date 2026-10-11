@@ -74,7 +74,7 @@ def run_summary(results,total=5):
 def question_time_limit(question):
     # Keep rounds fast and game-like. Speech gets a little extra time for mic startup.
     if question.get("mode")=="speech": return 8
-    return {"beginner":8,"intermediate":6,"advanced":4}.get(question.get("difficulty"),6)
+    return 5
 
 def current_user():
     if "user_id" not in session:
