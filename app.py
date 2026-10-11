@@ -18,6 +18,7 @@ PRONUNCIATION_PROXY_BUDGET_SECONDS = 1.8
 PRONUNCIATION_LOOKUP_TIMEOUT_SECONDS = 0.6
 PRONUNCIATION_AUDIO_TIMEOUT_SECONDS = 0.8
 PRONUNCIATION_CACHE_SECONDS = 86400
+RESULT_DICTIONARY_TIMEOUT_SECONDS = 0.8
 
 def supabase_auth_request(path, payload=None, access_token=None):
     base=os.getenv("SUPABASE_URL","").rstrip("/"); key=os.getenv("SUPABASE_ANON_KEY","")
@@ -85,6 +86,12 @@ def enrich_dictionary(word,dictionary=None):
     dictionary=dictionary or {}; hint=WORD_HINTS.get(word,""); definition=dictionary.get("definition") or ""
     if "暫時無法連線字典 API" in definition or not definition: definition=hint or "先用遊戲內建情境練習。"
     return {"word":dictionary.get("word") or word,"phonetic":dictionary.get("phonetic") or "","audio":dictionary.get("audio") or "","definition":definition,"local_hint":hint}
+
+def lookup_result_dictionary(word):
+    try:
+        return lookup_word(word,timeout=RESULT_DICTIONARY_TIMEOUT_SECONDS)
+    except TypeError:
+        return lookup_word(word)
 
 @app.route("/login", methods=["GET","POST"])
 def login():
@@ -253,7 +260,7 @@ def answer():
     if q.get("challenge_code"):
         combo=int(session.get("challenge_combo",0)); combo=combo+1 if result["correct"] else 0; session["challenge_combo"]=combo
         record_challenge_result(q["challenge_code"],p["id"],p["username"],result["correct"],elapsed,combo=combo)
-    analysis=build_wrong_answer_analysis(q,selected); dictionary=enrich_dictionary(word,lookup_word(word) if word else None)
+    analysis=build_wrong_answer_analysis(q,selected); dictionary=enrich_dictionary(word,lookup_result_dictionary(word) if word else None)
     item={"correct":bool(result["correct"]),"elapsed_ms":elapsed,"exp":result["exp"],"coins":result["coins"],"word":word,"answer":q.get("answer"),"selected":selected,"prompt":q.get("prompt")}
     if q.get("campaign_mode"):
         run=session.get("campaign_run") or {"results":[]}; run.setdefault("results",[]).append(item); session["campaign_run"]=run

@@ -197,6 +197,26 @@ def test_answer_redirects_to_get_result_page():
         assert "回關卡地圖".encode("utf-8") in result_response.data
 
 
+def test_answer_uses_fast_dictionary_lookup_before_result(monkeypatch):
+    app.config["TESTING"] = True
+    observed_timeouts = []
+
+    def fake_lookup(word, timeout=None):
+        observed_timeouts.append(timeout)
+        return {"word": word, "phonetic": "", "audio": "", "definition": ""}
+
+    monkeypatch.setattr("app.lookup_word", fake_lookup)
+    with app.test_client() as client:
+        client.get("/battle")
+        with client.session_transaction() as session:
+            question = session["question"]
+        response = client.post("/answer", data={"selected": question["answer"]})
+
+    assert response.status_code == 302
+    assert observed_timeouts
+    assert all(timeout is not None and timeout <= 1.2 for timeout in observed_timeouts)
+
+
 def test_battle_page_uses_clear_learning_instruction():
     app.config["TESTING"] = True
     with app.test_client() as client:
@@ -391,3 +411,13 @@ def test_frontend_pronunciation_falls_back_within_two_seconds():
     assert "PRONUNCIATION_AUDIO_START_TIMEOUT_MS=1500" in js
     assert "audio timeout" in js
     assert "7000" not in js
+
+
+def test_frontend_answer_submit_shows_immediate_feedback():
+    js = (Path(app.root_path) / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "判定中…" in js
+    assert "form.addEventListener('submit'" in js
+    assert "form.querySelectorAll('button').forEach" in js
+    assert "hiddenSelected.name='selected'" in js
+    assert "hiddenSelected.value=chosen.value" in js
