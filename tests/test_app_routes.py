@@ -18,6 +18,39 @@ def test_map_summary_uses_expanded_curriculum_totals():
     assert b"/144" in response.data
 
 
+def test_map_page_uses_single_fast_snapshot(monkeypatch):
+    app.config["TESTING"] = True
+    calls = {"snapshot": 0, "progress": 0, "achievements": 0, "metrics": 0}
+
+    def fake_user():
+        return {"id": "profile-123", "username": "Nova", "unlocked_chapter": 4}
+
+    def fake_snapshot(user_id):
+        calls["snapshot"] += 1
+        return {
+            "progress": {},
+            "earned": set(),
+            "metrics": {"completed_stages": 0, "total_stars": 0, "total_stages": 48, "max_stars": 144},
+        }
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("map page should use fetch_map_snapshot instead of extra progress/stat queries")
+
+    monkeypatch.setattr("app.current_user", fake_user)
+    monkeypatch.setattr("app.fetch_map_snapshot", fake_snapshot)
+    monkeypatch.setattr("app.fetch_stage_progress", forbidden)
+    monkeypatch.setattr("app.fetch_achievements", forbidden)
+    monkeypatch.setattr("app.achievement_metrics", forbidden)
+
+    with app.test_client() as client:
+        response = client.get("/map")
+
+    assert response.status_code == 200
+    assert calls["snapshot"] == 1
+    assert b"/48" in response.data
+    assert b"/144" in response.data
+
+
 def test_home_points_to_study_before_battle():
     app.config["TESTING"] = True
     with app.test_client() as client:
@@ -231,6 +264,8 @@ def test_forgot_password_and_google_login_controls_exist():
     html=response.data.decode("utf-8")
     assert "忘記密碼" in html
     assert "使用 Google 登入" in html
+    assert 'class="google-action polished-google-action"' in html
+    assert "不用另外記密碼" in html
 
 
 def test_register_page_has_google_signup_control():
@@ -241,6 +276,8 @@ def test_register_page_has_google_signup_control():
     assert response.status_code == 200
     assert "使用 Google 建立帳號" in html
     assert 'href="/login/google"' in html
+    assert 'class="google-action polished-google-action"' in html
+    assert "原本的訪客進度會一起保留" in html
 
 
 def test_campaign_battle_has_five_question_progress():
