@@ -4,7 +4,7 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for, flash
 from battle_engine import build_battle, build_review_question, grade_answer, build_wrong_answer_analysis
-from database import (apply_battle_result, record_stage_completion, fetch_learning_analytics, fetch_mistake_words, fetch_unmastered_words, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress,
+from database import (apply_battle_result, record_stage_completion, fetch_learning_analytics, fetch_mistake_words, fetch_unmastered_words, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress, fetch_map_snapshot,
                       fetch_daily, fetch_items, buy_item, has_item, create_challenge, fetch_challenge, touch_login, record_challenge_result, challenge_leaderboard,
                       claim_daily_mission, fetch_due_vocabulary, equip_item, unequip_item, fetch_recent_mistakes, clear_challenge_results, fetch_achievements, achievement_metrics)
 from dictionary_api import lookup_word
@@ -74,7 +74,11 @@ def question_time_limit(question):
 def current_user():
     if "user_id" not in session:
         p=ensure_guest_profile(username="見習勇者"); session["user_id"]=p["id"]
-    p=ensure_guest_profile(session["user_id"],username="見習勇者"); touch_login(p["id"]); return fetch_profile(p["id"])
+    p=ensure_guest_profile(session["user_id"],username="見習勇者")
+    today=time.strftime("%Y-%m-%d")
+    if session.get("login_touched_on")!=today:
+        touch_login(p["id"]); session["login_touched_on"]=today; p=fetch_profile(p["id"])
+    return p
 
 def enrich_dictionary(word,dictionary=None):
     if not word:return None
@@ -188,7 +192,7 @@ def stage_words(chapter, stage=None):
 
 @app.get("/map")
 def map_page():
-    p=current_user(); progress=fetch_stage_progress(p["id"]); earned_rows=fetch_achievements(p["id"]); earned={x["achievement_key"] for x in earned_rows}
+    p=current_user(); snapshot=fetch_map_snapshot(p["id"]); progress=snapshot["progress"]; earned=snapshot["earned"]
     chapter_stats={}
     total_stages=sum(len(chapter["stages"]) for chapter in CHAPTERS)
     max_stars=total_stages*3
@@ -197,7 +201,7 @@ def map_page():
         done=sum(1 for sid in ids if progress.get(sid,{}).get("completed"))
         stars=sum(int(progress.get(sid,{}).get("stars",0) or 0) for sid in ids)
         chapter_stats[chapter["id"]]={"done":done,"total":len(ids),"stars":stars,"max_stars":len(ids)*3,"percent":round(100*done/max(len(ids),1))}
-    metrics=achievement_metrics(p["id"]); metrics.update({"total_stages":total_stages,"max_stars":max_stars})
+    metrics=snapshot["metrics"]; metrics.update({"total_stages":total_stages,"max_stars":max_stars})
     return render_template("map.html",profile=p,chapters=CHAPTERS,progress=progress,chapter_stats=chapter_stats,achievements=ACHIEVEMENTS,earned=earned,metrics=metrics)
 @app.get("/lesson")
 def lesson():
