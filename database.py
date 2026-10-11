@@ -274,6 +274,30 @@ def achievement_metrics(user_id):
     return {"completed_stages":completed,"total_stars":stars,"chapter1_completed":chapter1,"tamed_words":tamed}
 
 
+def fetch_map_snapshot(user_id):
+    """Fetch all map state in one database transaction for faster page loads."""
+    with db_connection() as c:
+        progress_rows=c.execute(text("SELECT * FROM stage_progress WHERE user_id=:u"),{"u":user_id}).mappings().all()
+        earned_rows=c.execute(text("SELECT achievement_key FROM user_achievements WHERE user_id=:u"),{"u":user_id}).all()
+        metric_row=c.execute(text("""SELECT
+            COUNT(*) FILTER (WHERE completed=:yes) completed_stages,
+            COALESCE(SUM(stars),0) total_stars
+            FROM stage_progress WHERE user_id=:u""") if c.dialect.name=="postgresql" else text("""SELECT
+            SUM(CASE WHEN completed=:yes THEN 1 ELSE 0 END) completed_stages,
+            COALESCE(SUM(stars),0) total_stars
+            FROM stage_progress WHERE user_id=:u"""),{"u":user_id,"yes":True}).mappings().first()
+        chapter1=int(c.execute(text("SELECT COUNT(*) FROM stage_progress WHERE user_id=:u AND completed=:yes AND stage_id BETWEEN 101 AND 112"),{"u":user_id,"yes":True}).scalar() or 0)
+        tamed=int(c.execute(text("SELECT COUNT(*) FROM user_vocabulary WHERE user_id=:u AND proficiency_level>=5"),{"u":user_id}).scalar() or 0)
+    progress={int(r["stage_id"]):dict(r) for r in progress_rows}
+    metrics={
+        "completed_stages":int((metric_row or {}).get("completed_stages") or 0),
+        "total_stars":int((metric_row or {}).get("total_stars") or 0),
+        "chapter1_completed":chapter1,
+        "tamed_words":tamed,
+    }
+    return {"progress":progress,"earned":{r[0] for r in earned_rows},"metrics":metrics}
+
+
 def refresh_achievements(user_id):
     metrics=achievement_metrics(user_id); newly=[]
     with db_connection() as c:
