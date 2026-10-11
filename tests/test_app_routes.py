@@ -344,7 +344,7 @@ def test_campaign_question_totals_match_preview_count_for_all_school_levels(monk
                 assert question["campaign_total"] == expected
             response = client.post("/answer", data={"selected": question["answer"]})
             assert response.status_code == 302
-            assert response.headers["Location"].endswith("/result")
+            assert response.headers["Location"].endswith(f"/battle?chapter={chapter}&stage={stage}&difficulty=beginner")
 
             client.get(f"/battle?chapter={chapter}&stage={stage}&difficulty=beginner")
             with client.session_transaction() as session:
@@ -457,7 +457,7 @@ def test_campaign_continues_until_stage_word_count():
                 question = session["question"]
             response = client.post("/answer", data={"selected": question["answer"]})
             assert response.status_code == 302
-            assert response.headers["Location"].endswith("/result")
+            assert response.headers["Location"].endswith("/battle?chapter=1&stage=101&difficulty=beginner")
             if _ < 4:
                 client.get("/battle?chapter=1&stage=101&difficulty=beginner")
 
@@ -481,12 +481,44 @@ def test_campaign_practices_each_preview_word_once_before_summary():
             response = client.post("/answer", data={"selected": question["answer"]})
             assert response.status_code == 302
             if index < 9:
-                assert response.headers["Location"].endswith("/result")
+                assert response.headers["Location"].endswith("/battle?chapter=1&stage=101&difficulty=beginner")
                 client.get("/battle?chapter=1&stage=101&difficulty=beginner")
             else:
                 assert response.headers["Location"].endswith("/level-summary")
 
         assert set(practiced_words) == preview_words
+
+
+def test_level_summary_shows_wrong_answers_in_dropdown():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["level_summary"] = {
+                "stage_id": 101,
+                "chapter_id": 1,
+                "difficulty": "beginner",
+                "stars": 1,
+                "correct": 8,
+                "attempts": 10,
+                "accuracy": 80,
+                "avg_seconds": 1.2,
+                "exp": 80,
+                "coins": 20,
+                "score": 76,
+                "weakest": "library",
+                "wrong": [
+                    {"answer": "library", "selected": "student", "prompt": "這是日常與課堂中很常遇到的字：圖書館。"}
+                ],
+            }
+        response = client.get("/level-summary")
+
+    html = response.data.decode("utf-8")
+    assert response.status_code == 200
+    assert "<details" in html
+    assert "<summary" in html
+    assert "本關錯題 1 題" in html
+    assert "library" in html
+    assert "student" in html
 
 
 def test_pronounce_audio_falls_back_to_google_when_dictionary_audio_fails(monkeypatch):

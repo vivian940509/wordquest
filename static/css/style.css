@@ -404,6 +404,24 @@ main {
     font-weight: 900;
 }
 
+.summary-wrong-details summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    cursor: pointer;
+    list-style: none;
+}
+
+.summary-wrong-details summary::-webkit-details-marker {
+    display: none;
+}
+
+.summary-wrong-details summary span {
+    color: var(--gold);
+    font-weight: 800;
+}
+
 .result-layout {
     display: grid;
     gap: 18px;

@@ -268,6 +268,7 @@ def answer():
             for a in achievements or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
             session["level_summary"]=summary; session.pop("campaign_run",None); session.pop("last_result",None)
             return redirect(url_for("level_summary"))
+        return redirect(url_for("battle",chapter=q.get("chapter_id"),stage=q.get("stage_id"),difficulty=q.get("difficulty")))
     if q.get("practice_mode"):
         run=session.get("practice_run") or {"results":[]}; run.setdefault("results",[]).append(item); session["practice_run"]=run
         limit=run.get("limit")
