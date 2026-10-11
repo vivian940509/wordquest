@@ -2,27 +2,37 @@ import random
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 
-from word_data import CLOZE_TRAPS, STARTER_WORDS, WORD_HINTS
+from word_data import CLOZE_TRAPS, STARTER_WORDS, WORD_HINTS, chapter_words, stage_words
 
 SRS_INTERVAL_DAYS = [0, 1, 3, 7, 14, 30]
 DIFFICULTY_LABELS = {"beginner": "初級", "intermediate": "中級", "advanced": "高級"}
 
 
-def _cards_for_chapter(chapter_id):
-    cards = [x for x in STARTER_WORDS if x.get("chapter") == chapter_id]
+def _available_cards(chapter_id, stage_id=None, excluded_words=None):
+    excluded = {word for word in (excluded_words or []) if word}
+    cards = stage_words(chapter_id, stage_id) if stage_id else chapter_words(chapter_id)
+    cards = [card for card in cards if card.get("word") not in excluded]
+    if not cards and excluded:
+        cards = stage_words(chapter_id, stage_id) if stage_id else chapter_words(chapter_id)
     return cards or STARTER_WORDS
 
 
-def build_vocab_question(seed=None, weak_mode=False, difficulty="beginner", chapter_id=1, stage_id=None):
+def build_vocab_question(seed=None, weak_mode=False, difficulty="beginner", chapter_id=1, stage_id=None, excluded_words=None):
     rng = random.Random(seed)
-    card = rng.choice(_cards_for_chapter(chapter_id))
+    cards = _available_cards(chapter_id, stage_id, excluded_words)
+    card = rng.choice(cards)
     if difficulty == "intermediate":
         distractors = card.get("similar", card["distractors"])[:3]
     else:
         distractors = card["distractors"][:3]
+    if not distractors:
+        pool = [item["word"] for item in cards if item.get("word") != card["word"]]
+        if len(pool) < 3:
+            pool.extend(item["word"] for item in chapter_words(chapter_id) if item.get("word") != card["word"])
+        distractors = list(dict.fromkeys(pool))[:3]
     options = [card["word"], *distractors]
     if weak_mode and difficulty == "beginner":
-        options = [card["word"], distractors[0]]
+        options = [card["word"], distractors[0]] if distractors else [card["word"]]
     rng.shuffle(options)
     prompt = card["context"] if difficulty != "advanced" else card["example"].replace(card["word"], "_____")
     instruction = "選出符合情境的英文" if difficulty != "advanced" else "Choose the best word for the sentence"
@@ -64,9 +74,9 @@ def build_cloze_question(seed=None, chapter_id=2, stage_id=None):
     }
 
 
-def build_speech_challenge(seed=None, chapter_id=1, stage_id=None, difficulty="intermediate"):
+def build_speech_challenge(seed=None, chapter_id=1, stage_id=None, difficulty="intermediate", excluded_words=None):
     rng = random.Random(seed)
-    card = rng.choice(_cards_for_chapter(chapter_id))
+    card = rng.choice(_available_cards(chapter_id, stage_id, excluded_words))
     return {
         "mode":"speech", "difficulty":difficulty, "difficulty_label":DIFFICULTY_LABELS.get(difficulty, difficulty),
         "chapter_id":chapter_id, "stage_id":stage_id, "monster":"回音法師", "instruction":"跟著唸出這句英文",
@@ -76,14 +86,14 @@ def build_speech_challenge(seed=None, chapter_id=1, stage_id=None, difficulty="i
     }
 
 
-def build_battle(seed=None, mistake_streak=0, difficulty="beginner", chapter_id=1, stage_id=None):
+def build_battle(seed=None, mistake_streak=0, difficulty="beginner", chapter_id=1, stage_id=None, excluded_words=None):
     rng = random.Random(seed)
     if difficulty == "advanced":
         return build_cloze_question(seed=seed, chapter_id=chapter_id, stage_id=stage_id)
     mode = rng.choice(["shield", "shield", "speech"] if difficulty == "intermediate" else ["shield"])
     if mode == "speech":
-        return build_speech_challenge(seed=seed, chapter_id=chapter_id, stage_id=stage_id, difficulty=difficulty)
-    return build_vocab_question(seed=seed, weak_mode=mistake_streak >= 2, difficulty=difficulty, chapter_id=chapter_id, stage_id=stage_id)
+        return build_speech_challenge(seed=seed, chapter_id=chapter_id, stage_id=stage_id, difficulty=difficulty, excluded_words=excluded_words)
+    return build_vocab_question(seed=seed, weak_mode=mistake_streak >= 2, difficulty=difficulty, chapter_id=chapter_id, stage_id=stage_id, excluded_words=excluded_words)
 
 
 

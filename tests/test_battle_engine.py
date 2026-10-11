@@ -16,6 +16,15 @@ def test_vocab_question_explains_options_for_beginners():
     assert question["option_details"][question["answer"]]
 
 
+def test_stage_question_excludes_words_already_seen_in_level():
+    seen = {"starving", "exhausted", "furious", "delighted", "confident", "nervous", "family", "friend", "school"}
+    answers = {
+        build_vocab_question(seed=seed, chapter_id=1, stage_id=101, excluded_words=seen)["answer"]
+        for seed in range(20)
+    }
+    assert answers == {"teacher"}
+
+
 def test_grade_answer_rewards_correct_choice():
     question = build_battle(seed=1, mistake_streak=0)
     result = grade_answer(question, question["answer"])

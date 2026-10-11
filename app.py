@@ -8,7 +8,7 @@ from database import (apply_battle_result, record_stage_completion, fetch_learni
                       fetch_daily, fetch_items, buy_item, has_item, create_challenge, fetch_challenge, touch_login, record_challenge_result, challenge_leaderboard,
                       claim_daily_mission, fetch_due_vocabulary, equip_item, unequip_item, fetch_recent_mistakes, clear_challenge_results, fetch_achievements, achievement_metrics)
 from dictionary_api import lookup_word
-from word_data import STARTER_WORDS, WORD_HINTS, CHAPTERS, DAILY_MISSIONS, SHOP_ITEMS, ACHIEVEMENTS
+from word_data import STARTER_WORDS, WORD_HINTS, CHAPTERS, DAILY_MISSIONS, SHOP_ITEMS, ACHIEVEMENTS, stage_words
 from ai_teacher import explain as teacher_explain
 load_dotenv()
 app=Flask(__name__); app.config["SECRET_KEY"]=os.getenv("SECRET_KEY","dev-wordquest"); app.permanent_session_lifetime=timedelta(days=30)
@@ -19,6 +19,10 @@ PRONUNCIATION_LOOKUP_TIMEOUT_SECONDS = 0.6
 PRONUNCIATION_AUDIO_TIMEOUT_SECONDS = 0.8
 PRONUNCIATION_CACHE_SECONDS = 86400
 RESULT_DICTIONARY_TIMEOUT_SECONDS = 0.8
+
+def campaign_total_for(chapter, stage=None):
+    words = stage_words(chapter, stage)
+    return max(len(words), 1)
 
 def supabase_auth_request(path, payload=None, access_token=None):
     base=os.getenv("SUPABASE_URL","").rstrip("/"); key=os.getenv("SUPABASE_ANON_KEY","")
@@ -167,7 +171,8 @@ def logout():
 @app.get("/account")
 def account():
     p=current_user(); vocab=fetch_vocabulary(p["id"]); progress=fetch_stage_progress(p["id"]); mistakes=fetch_recent_mistakes(p["id"],5)
-    stats={"words":len(vocab),"completed":sum(1 for x in progress.values() if x.get("completed")),"stars":sum(int(x.get("stars",0) or 0) for x in progress.values()),"mistakes":len(mistakes),"due":len(fetch_due_vocabulary(p["id"]))}
+    total_stages=sum(len(chapter["stages"]) for chapter in CHAPTERS); max_stars=total_stages*3
+    stats={"words":len(vocab),"completed":sum(1 for x in progress.values() if x.get("completed")),"stars":sum(int(x.get("stars",0) or 0) for x in progress.values()),"mistakes":len(mistakes),"due":len(fetch_due_vocabulary(p["id"])),"total_stages":total_stages,"max_stars":max_stars}
     analytics=fetch_learning_analytics(p["id"])
     return render_template("account.html",profile=p,stats=stats,analytics=analytics,auth_email=session.get("auth_email"))
 
@@ -187,15 +192,6 @@ def index():
     return render_template("index.html",profile=p,daily=daily,missions=DAILY_MISSIONS,claimed=set(claimed),due_count=len(fetch_due_vocabulary(p["id"])))
 @app.get("/study")
 def study(): return render_template("study.html",profile=current_user(),words=STARTER_WORDS)
-
-def stage_words(chapter, stage=None):
-    words=[w for w in STARTER_WORDS if int(w.get("chapter",0))==int(chapter)]
-    if not words:
-        return []
-    chapter_data=next((c for c in CHAPTERS if c["id"]==int(chapter)),None)
-    stage_ids=[s["id"] for s in chapter_data["stages"]] if chapter_data else []
-    stage_index=stage_ids.index(stage) if stage in stage_ids else 0
-    return [words[(stage_index+i)%len(words)] for i in range(min(5,len(words)))]
 
 @app.get("/map")
 def map_page():
@@ -236,14 +232,16 @@ def battle():
         if request.args.get("restart")=="1" or not run or run.get("stage_id")!=stage or run.get("difficulty")!=difficulty:
             run={"stage_id":stage,"chapter_id":chapter,"difficulty":difficulty,"results":[],"seed":int(time.time()*1000)}; session["campaign_run"]=run
         round_no=len(run.get("results",[]))+1
-        if round_no>5: return redirect(url_for("level_summary"))
+        campaign_total=campaign_total_for(chapter, stage)
+        if round_no>campaign_total: return redirect(url_for("level_summary"))
         seed=int(run.get("seed",int(time.time())))+round_no*9973
     else:
         round_no=1; seed=int(time.time())
-    q=build_battle(seed=seed,mistake_streak=int(session.get("mistake_streak",0)),difficulty=difficulty,chapter_id=chapter,stage_id=stage)
+    used_answers=[result.get("word") or result.get("answer") for result in run.get("results",[])] if stage and not challenge else []
+    q=build_battle(seed=seed,mistake_streak=int(session.get("mistake_streak",0)),difficulty=difficulty,chapter_id=chapter,stage_id=stage,excluded_words=used_answers)
     q["challenge_code"]=challenge_code if challenge else ""; q["challenge_round"]=round_no if challenge else 0
     if stage and not challenge:
-        q.update({"campaign_round":round_no,"campaign_total":5,"campaign_mode":True,"defer_stage_progress":True})
+        q.update({"campaign_round":round_no,"campaign_total":campaign_total_for(chapter, stage),"campaign_mode":True,"defer_stage_progress":True})
     q["time_limit"]=question_time_limit(q); session["question"]=q; session["question_started_ms"]=int(time.time()*1000)
     return render_template("battle.html",profile=p,question=q)
 @app.post("/answer")
@@ -264,7 +262,7 @@ def answer():
     if q.get("campaign_mode"):
         run=session.get("campaign_run") or {"results":[]}; run.setdefault("results",[]).append(item); session["campaign_run"]=run
         if len(run["results"])>=5:
-            summary=run_summary(run["results"],5); summary.update({"stage_id":run.get("stage_id"),"chapter_id":run.get("chapter_id"),"difficulty":run.get("difficulty")})
+            summary=run_summary(run["results"],campaign_total_for(run.get("chapter_id"),run.get("stage_id"))); summary.update({"stage_id":run.get("stage_id"),"chapter_id":run.get("chapter_id"),"difficulty":run.get("difficulty")})
             achievements=record_stage_completion(p["id"],run.get("stage_id"),summary["stars"],summary["score"],completed=summary["correct"]>=3)
             for a in achievements or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
             session["level_summary"]=summary; session.pop("campaign_run",None); session.pop("last_result",None)

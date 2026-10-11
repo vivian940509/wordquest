@@ -1,6 +1,18 @@
-def _make_stages(chapter_id, titles):
-    difficulties = ["beginner"] * 4 + ["intermediate"] * 4 + ["advanced"] * 4
-    return [{"id": chapter_id * 100 + i + 1, "title": title, "difficulty": difficulties[i]} for i, title in enumerate(titles)]
+import csv
+from pathlib import Path
+
+
+def _make_stages(chapter_id, titles, total=None):
+    count = total or len(titles)
+    stages = []
+    for i in range(count):
+        if i < len(titles):
+            title = titles[i]
+        else:
+            title = f"實用單字 {i + 1}"
+        difficulty = "beginner" if i < count / 3 else "intermediate" if i < count * 2 / 3 else "advanced"
+        stages.append({"id": chapter_id * 100 + i + 1, "title": title, "difficulty": difficulty})
+    return stages
 
 
 CHAPTERS = [
@@ -9,38 +21,42 @@ CHAPTERS = [
         "title": "國小基礎",
         "icon": "🎒",
         "description": "生活、情緒、動作與簡單句子",
-        "stages": _make_stages(1, ["餓肚子警報", "累到不行", "快樂與生氣", "大小與安靜", "自信 vs 緊張", "生活小對話", "身體感受", "日常聽說", "基礎克漏字", "圖片情境", "綜合複習", "國小 Boss"]),
+        "words_per_stage": 10,
+        "stages": _make_stages(1, ["餓肚子警報", "累到不行", "快樂與生氣", "大小與安靜", "自信 vs 緊張", "生活小對話", "身體感受", "日常聽說", "基礎克漏字", "圖片情境", "綜合複習", "國小 Boss"], total=20),
     },
     {
         "id": 2,
         "title": "國中進階",
         "icon": "🏫",
         "description": "校園、借還、活動、比較與常見文法",
-        "stages": _make_stages(2, ["借筆小任務", "課堂指令", "社團活動", "考前準備", "相似字陷阱", "報告前夕", "校園小對話", "比較與感受", "動名詞克漏字", "時態判斷", "閱讀小測", "國中 Boss"]),
+        "words_per_stage": 15,
+        "stages": _make_stages(2, ["借筆小任務", "課堂指令", "社團活動", "考前準備", "相似字陷阱", "報告前夕", "校園小對話", "比較與感受", "動名詞克漏字", "時態判斷", "閱讀小測", "國中 Boss"], total=80),
     },
     {
         "id": 3,
         "title": "高中核心",
         "icon": "📚",
         "description": "旅行、社會議題、抽象形容詞與閱讀句型",
-        "stages": _make_stages(3, ["點餐入門", "問路任務", "旅館入住", "交通與目的地", "旅行干擾字", "觀點表達", "原因結果", "閱讀推論", "高中克漏字", "轉折語氣", "長句理解", "高中 Boss"]),
+        "words_per_stage": 20,
+        "stages": _make_stages(3, ["點餐入門", "問路任務", "旅館入住", "交通與目的地", "旅行干擾字", "觀點表達", "原因結果", "閱讀推論", "高中克漏字", "轉折語氣", "長句理解", "高中 Boss"], total=100),
     },
     {
         "id": 4,
         "title": "大學學術",
         "icon": "🎓",
         "description": "學術閱讀、研究、論證、摘要與正式用語",
-        "stages": _make_stages(4, ["學術單字入門", "研究方法", "資料與證據", "論文摘要", "立場與反駁", "因果推論", "正式語氣", "簡報問答", "學術克漏字", "段落邏輯", "批判閱讀", "大學 Boss"]),
+        "words_per_stage": 25,
+        "stages": _make_stages(4, ["學術單字入門", "研究方法", "資料與證據", "論文摘要", "立場與反駁", "因果推論", "正式語氣", "簡報問答", "學術克漏字", "段落邏輯", "批判閱讀", "大學 Boss"], total=100),
     },
 ]
 
 ACHIEVEMENTS = [
     {"key":"first_clear","icon":"⚔️","title":"初次勝利","description":"完成第一個關卡","metric":"completed_stages","target":1,"reward":20},
-    {"key":"chapter_one","icon":"🏠","title":"日常生活達人","description":"完成第一章全部 7 關","metric":"chapter1_completed","target":7,"reward":50},
+    {"key":"chapter_one","icon":"🏠","title":"日常生活達人","description":"完成第一章全部 20 關","metric":"chapter1_completed","target":20,"reward":50},
     {"key":"ten_stars","icon":"⭐","title":"星星收藏家","description":"累積獲得 10 顆關卡星星","metric":"total_stars","target":10,"reward":40},
     {"key":"word_tamer","icon":"🐉","title":"第一隻馴服單字","description":"把任一單字練到 5 星","metric":"tamed_words","target":1,"reward":50},
     {"key":"world_explorer","icon":"🗺️","title":"世界探索者","description":"完成 15 個關卡","metric":"completed_stages","target":15,"reward":80},
-    {"key":"wordquest_master","icon":"👑","title":"WordQuest 大師","description":"完成三章共 21 關","metric":"completed_stages","target":21,"reward":120},
+    {"key":"wordquest_master","icon":"👑","title":"WordQuest 大師","description":"完成 300 關完整課程","metric":"completed_stages","target":300,"reward":120},
 ]
 
 
@@ -104,15 +120,156 @@ CLOZE_TRAPS = [
     {"chapter":4,"prompt":"The article provides evidence _____ the hypothesis.","answer":"supporting","options":["support","supporting","supported","to support"],"explanation":"evidence supporting the hypothesis 是分詞片語，表示支持假設的證據。","memory":"名詞後面用 V-ing 可以補充說明它正在做的功能。"},
 ]
 
+COMMON_WORD_BANK = [
+    (1, "family", "noun", "家人", "My family eats dinner together."),
+    (1, "friend", "noun", "朋友", "My friend helps me at school."),
+    (1, "school", "noun", "學校", "I go to school by bus."),
+    (1, "teacher", "noun", "老師", "The teacher writes on the board."),
+    (1, "student", "noun", "學生", "Every student has a book."),
+    (1, "breakfast", "noun", "早餐", "I eat breakfast at seven."),
+    (1, "lunch", "noun", "午餐", "We have lunch at noon."),
+    (1, "dinner", "noun", "晚餐", "Dinner is ready."),
+    (1, "water", "noun", "水", "Please drink some water."),
+    (1, "homework", "noun", "作業", "I finish my homework after dinner."),
+    (1, "market", "noun", "市場", "Mom buys fruit at the market."),
+    (1, "library", "noun", "圖書館", "We read books in the library."),
+    (1, "morning", "noun", "早上", "I brush my teeth in the morning."),
+    (1, "evening", "noun", "傍晚", "We take a walk in the evening."),
+    (1, "clean", "adjective", "乾淨的", "My room is clean."),
+    (1, "dirty", "adjective", "髒的", "Your shoes are dirty."),
+    (1, "early", "adverb", "早地", "I get up early."),
+    (1, "late", "adverb", "晚地", "Do not be late for class."),
+    (1, "easy", "adjective", "簡單的", "This question is easy."),
+    (1, "difficult", "adjective", "困難的", "Math is difficult for me."),
+    (1, "strong", "adjective", "強壯的", "My brother is strong."),
+    (1, "weak", "adjective", "虛弱的", "I feel weak today."),
+    (1, "healthy", "adjective", "健康的", "Vegetables are healthy."),
+    (1, "sick", "adjective", "生病的", "She is sick today."),
+    (1, "careful", "adjective", "小心的", "Be careful when you cross the street."),
+    (2, "activity", "noun", "活動", "The club activity starts after school."),
+    (2, "subject", "noun", "科目", "Science is my favorite subject."),
+    (2, "history", "noun", "歷史", "We learn history on Friday."),
+    (2, "science", "noun", "科學", "Science helps us understand nature."),
+    (2, "dictionary", "noun", "字典", "Use a dictionary to check the word."),
+    (2, "notebook", "noun", "筆記本", "I write notes in my notebook."),
+    (2, "classmate", "noun", "同學", "My classmate sits next to me."),
+    (2, "team", "noun", "隊伍", "Our team won the game."),
+    (2, "practice", "verb", "練習", "Practice English every day."),
+    (2, "finish", "verb", "完成", "Please finish your homework."),
+    (2, "choose", "verb", "選擇", "Choose the best answer."),
+    (2, "share", "verb", "分享", "Share your ideas with the group."),
+    (2, "join", "verb", "加入", "I want to join the music club."),
+    (2, "invite", "verb", "邀請", "Invite your friends to the party."),
+    (2, "bring", "verb", "帶來", "Bring your textbook tomorrow."),
+    (2, "carry", "verb", "攜帶", "Can you carry this box?"),
+    (2, "important", "adjective", "重要的", "Sleep is important for students."),
+    (2, "popular", "adjective", "受歡迎的", "Basketball is popular at our school."),
+    (2, "useful", "adjective", "有用的", "This app is useful for learning."),
+    (2, "different", "adjective", "不同的", "We have different opinions."),
+    (3, "airport", "noun", "機場", "We arrived at the airport early."),
+    (3, "hotel", "noun", "旅館", "The hotel is near the station."),
+    (3, "restaurant", "noun", "餐廳", "This restaurant is famous."),
+    (3, "museum", "noun", "博物館", "The museum opens at nine."),
+    (3, "weather", "noun", "天氣", "The weather is sunny today."),
+    (3, "culture", "noun", "文化", "Travel helps us learn about culture."),
+    (3, "environment", "noun", "環境", "We should protect the environment."),
+    (3, "society", "noun", "社會", "Technology changes society."),
+    (3, "experience", "noun", "經驗", "Travel was a great experience."),
+    (3, "information", "noun", "資訊", "I found useful information online."),
+    (3, "explain", "verb", "解釋", "Can you explain the rule?"),
+    (3, "decide", "verb", "決定", "We decided to take the train."),
+    (3, "suggest", "verb", "建議", "I suggest visiting the museum."),
+    (3, "protect", "verb", "保護", "We must protect animals."),
+    (3, "increase", "verb", "增加", "Prices may increase next year."),
+    (3, "reduce", "verb", "減少", "Reduce waste by using less plastic."),
+    (3, "possible", "adjective", "可能的", "It is possible to finish today."),
+    (3, "serious", "adjective", "嚴重的", "Pollution is a serious problem."),
+    (3, "local", "adjective", "當地的", "Try the local food."),
+    (3, "modern", "adjective", "現代的", "This city has modern buildings."),
+    (4, "academic", "adjective", "學術的", "Academic writing needs clear evidence."),
+    (4, "research", "noun", "研究", "The research took six months."),
+    (4, "source", "noun", "來源", "Check the source before you share it."),
+    (4, "concept", "noun", "概念", "This concept is difficult at first."),
+    (4, "context", "noun", "脈絡", "Use context to understand the sentence."),
+    (4, "factor", "noun", "因素", "Sleep is one factor in learning."),
+    (4, "function", "noun", "功能", "What is the function of this tool?"),
+    (4, "impact", "noun", "影響", "The policy had a strong impact."),
+    (4, "issue", "noun", "議題", "Climate change is a global issue."),
+    (4, "process", "noun", "過程", "Learning is a long process."),
+    (4, "require", "verb", "需要", "This course requires weekly reading."),
+    (4, "evaluate", "verb", "評估", "Evaluate the evidence carefully."),
+    (4, "identify", "verb", "辨識", "Identify the main idea first."),
+    (4, "indicate", "verb", "指出", "The data indicate a clear trend."),
+    (4, "achieve", "verb", "達成", "You can achieve your goal with practice."),
+    (4, "specific", "adjective", "具體的", "Give a specific example."),
+    (4, "available", "adjective", "可取得的", "The report is available online."),
+    (4, "consistent", "adjective", "一致的", "The results were consistent."),
+    (4, "potential", "adjective", "潛在的", "There are potential risks."),
+    (4, "complex", "adjective", "複雜的", "This is a complex question."),
+]
+
+
+def _common_study_cards():
+    existing = {item["word"] for item in STARTER_WORDS}
+    cards = []
+    for chapter, word, pos, zh, example in COMMON_WORD_BANK:
+        if word in existing:
+            continue
+        cards.append({
+            "word": word,
+            "pos": pos,
+            "zh": zh,
+            "chapter": chapter,
+            "context": f"這是日常與課堂中很常遇到的字：{zh}。",
+            "example": example,
+            "memory": f"{word} = {zh}。先記住中文意思，再放回例句理解。",
+            "distractors": [],
+            "similar": [],
+        })
+    return cards
+
+
+def _toeic_5000_cards():
+    path = Path(__file__).resolve().parent / "data" / "toeic_5000_zh.csv"
+    if not path.exists():
+        return []
+    existing = {item["word"] for item in STARTER_WORDS}
+    cards = []
+    chapter_limits = [(1, 200), (2, 1400), (3, 3400)]
+    with path.open(encoding="utf-8", newline="") as f:
+        for row in csv.DictReader(f):
+            word = (row.get("word") or "").strip().lower()
+            if not word or word in existing:
+                continue
+            index = len(cards)
+            chapter = 4
+            for chapter_id, limit in chapter_limits:
+                if index < limit:
+                    chapter = chapter_id
+                    break
+            zh = (row.get("zh") or "").strip()
+            pos = (row.get("pos") or "word").strip() or "word"
+            example = (row.get("example") or f"Review the word: {word}.").strip()
+            cards.append({
+                "word": word,
+                "pos": pos,
+                "zh": zh,
+                "chapter": chapter,
+                "context": f"多益與日常閱讀常見字：{zh}。",
+                "example": example,
+                "memory": f"{word} = {zh}。先背核心意思，再用例句回想。",
+                "distractors": [],
+                "similar": [],
+            })
+            existing.add(word)
+    return cards
+
+
 def _option_word_chapters():
     chapters = {}
     for item in STARTER_WORDS:
         chapter = int(item.get("chapter", 1) or 1)
         for option in [*item.get("distractors", []), *item.get("similar", [])]:
-            chapters.setdefault(option, chapter)
-    for trap in CLOZE_TRAPS:
-        chapter = int(trap.get("chapter", 2) or 2)
-        for option in trap.get("options", []):
             chapters.setdefault(option, chapter)
     return chapters
 
@@ -137,8 +294,39 @@ def _extra_study_cards():
         })
     return cards
 
+STARTER_WORDS.extend(_common_study_cards())
+STARTER_WORDS.extend(_toeic_5000_cards())
 STARTER_WORDS.extend(_extra_study_cards())
 WORD_HINTS = {item["word"]: item["zh"] for item in STARTER_WORDS}
+
+
+def _unique_cards(cards):
+    seen = set()
+    unique = []
+    for card in cards:
+        word = card.get("word")
+        if not word or word in seen:
+            continue
+        seen.add(word)
+        unique.append(card)
+    return unique
+
+
+def chapter_words(chapter):
+    return _unique_cards([w for w in STARTER_WORDS if int(w.get("chapter", 0)) == int(chapter)])
+
+
+def stage_words(chapter, stage=None, limit=None):
+    words = chapter_words(chapter)
+    if not words:
+        return []
+    chapter_data = next((c for c in CHAPTERS if c["id"] == int(chapter)), None)
+    limit = int(limit or (chapter_data or {}).get("words_per_stage", 10))
+    stage_ids = [s["id"] for s in chapter_data["stages"]] if chapter_data else []
+    stage_index = stage_ids.index(stage) if stage in stage_ids else 0
+    start = (stage_index * limit) % len(words)
+    selected = [words[(start + i) % len(words)] for i in range(min(limit, len(words)))]
+    return _unique_cards(selected)
 
 DAILY_MISSIONS = [
     {"key":"correct_5","title":"今天答對 5 題","target":5,"metric":"correct_answers","reward":20},

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from app import app
@@ -6,7 +7,8 @@ from word_data import CHAPTERS, CLOZE_TRAPS, STARTER_WORDS
 
 def test_curriculum_map_has_four_school_levels_and_many_stages():
     assert [chapter["title"] for chapter in CHAPTERS] == ["國小基礎", "國中進階", "高中核心", "大學學術"]
-    assert [len(chapter["stages"]) for chapter in CHAPTERS] == [12, 12, 12, 12]
+    assert [len(chapter["stages"]) for chapter in CHAPTERS] == [20, 80, 100, 100]
+    assert [chapter["words_per_stage"] for chapter in CHAPTERS] == [10, 15, 20, 25]
 
 
 def test_map_summary_uses_expanded_curriculum_totals():
@@ -14,8 +16,8 @@ def test_map_summary_uses_expanded_curriculum_totals():
     with app.test_client() as client:
         response = client.get("/map")
     assert response.status_code == 200
-    assert b"/48" in response.data
-    assert b"/144" in response.data
+    assert b"/300" in response.data
+    assert b"/900" in response.data
 
 
 def test_map_page_uses_single_fast_snapshot(monkeypatch):
@@ -30,7 +32,7 @@ def test_map_page_uses_single_fast_snapshot(monkeypatch):
         return {
             "progress": {},
             "earned": set(),
-            "metrics": {"completed_stages": 0, "total_stars": 0, "total_stages": 48, "max_stars": 144},
+            "metrics": {"completed_stages": 0, "total_stars": 0, "total_stages": 300, "max_stars": 900},
         }
 
     def forbidden(*args, **kwargs):
@@ -47,8 +49,8 @@ def test_map_page_uses_single_fast_snapshot(monkeypatch):
 
     assert response.status_code == 200
     assert calls["snapshot"] == 1
-    assert b"/48" in response.data
-    assert b"/144" in response.data
+    assert b"/300" in response.data
+    assert b"/900" in response.data
 
 
 def test_home_points_to_study_before_battle():
@@ -88,16 +90,27 @@ def test_study_page_includes_distractor_word_cards():
     assert b'data-speak-word="afraid"' in response.data
 
 
-def test_study_cards_include_every_battle_option_word():
+def test_study_cards_include_every_vocabulary_option_word():
     card_words = {item["word"] for item in STARTER_WORDS}
     option_words = set()
     for item in STARTER_WORDS:
         option_words.update(item.get("distractors", []))
         option_words.update(item.get("similar", []))
-    for trap in CLOZE_TRAPS:
-        option_words.update(trap.get("options", []))
 
     assert option_words <= card_words
+
+
+def test_study_cards_do_not_include_cloze_grammar_forms():
+    card_words = {item["word"] for item in STARTER_WORDS}
+    assert {"saw", "seen", "told", "ordered", "synthesized"}.isdisjoint(card_words)
+
+
+def test_each_chapter_has_at_least_ten_unique_word_cards():
+    assert len({item["word"] for item in STARTER_WORDS}) >= 5000
+    for chapter in CHAPTERS:
+        words = [item["word"] for item in STARTER_WORDS if item.get("chapter") == chapter["id"]]
+        assert len(words) == len(set(words))
+        assert len(set(words)) >= chapter["words_per_stage"] * 2
 
 
 def test_stage_lesson_shows_meaning_pronunciation_before_practice():
@@ -107,10 +120,45 @@ def test_stage_lesson_shows_meaning_pronunciation_before_practice():
     assert response.status_code == 200
     assert "starving".encode("utf-8") in response.data
     assert "餓到不行".encode("utf-8") in response.data
-    assert "delighted".encode("utf-8") in response.data
-    assert "confident".encode("utf-8") in response.data
     assert b'data-speak-word="starving"' in response.data
     assert b"/battle?chapter=1&amp;stage=101&amp;difficulty=beginner" in response.data
+
+
+def test_adjacent_stage_lessons_use_different_word_sets():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        first = client.get("/lesson?chapter=1&stage=101&difficulty=beginner")
+        second = client.get("/lesson?chapter=1&stage=102&difficulty=beginner")
+
+    first_html = first.data.decode("utf-8")
+    second_html = second.data.decode("utf-8")
+    first_words = set(re.findall(r'data-speak-word="([^"]+)"', first_html))
+    second_words = set(re.findall(r'data-speak-word="([^"]+)"', second_html))
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert len(first_words) == 10
+    assert len(second_words) == 10
+    assert first_words.isdisjoint(second_words)
+    assert "starving" in first_words
+    assert "student" in second_words
+
+
+def test_lesson_word_count_scales_by_school_level():
+    app.config["TESTING"] = True
+    cases = [
+        (1, 101, 10),
+        (2, 201, 15),
+        (3, 301, 20),
+        (4, 401, 25),
+    ]
+    with app.test_client() as client:
+        for chapter, stage, expected in cases:
+            response = client.get(f"/lesson?chapter={chapter}&stage={stage}&difficulty=beginner")
+            html = response.data.decode("utf-8")
+            words = set(re.findall(r'data-speak-word="([^"]+)"', html))
+            assert response.status_code == 200
+            assert len(words) == expected
+            assert f'data-card-total="{expected}"' in html
 
 
 def test_stage_lesson_has_mobile_single_card_preview_flow():
@@ -121,8 +169,8 @@ def test_stage_lesson_has_mobile_single_card_preview_flow():
     assert response.status_code == 200
     assert 'class="lesson-carousel"' in html
     assert 'data-lesson-carousel' in html
-    assert 'data-card-total="5"' in html
-    assert "1 / 5" in html
+    assert 'data-card-total="10"' in html
+    assert "1 / 10" in html
     assert 'class="lesson-progress-bar"' in html
     assert 'data-lesson-prev' in html
     assert 'data-lesson-next' in html
@@ -347,13 +395,13 @@ def test_register_page_has_google_signup_control():
     assert "原本的訪客進度會一起保留" in html
 
 
-def test_campaign_battle_has_five_question_progress():
+def test_campaign_battle_uses_stage_word_count_progress():
     app.config["TESTING"] = True
     with app.test_client() as client:
         response=client.get("/battle?chapter=1&stage=101&difficulty=beginner&restart=1")
     html=response.data.decode("utf-8")
     assert response.status_code == 200
-    assert "第 1/5 題" in html
+    assert "第 1/10 題" in html
     assert 'data-countdown="8"' in html
 
 
