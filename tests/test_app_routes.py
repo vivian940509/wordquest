@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from app import app
-from word_data import CHAPTERS
+from word_data import CHAPTERS, CLOZE_TRAPS, STARTER_WORDS
 
 
 def test_curriculum_map_has_four_school_levels_and_many_stages():
@@ -76,6 +76,28 @@ def test_study_page_has_pronunciation_buttons():
     assert response.status_code == 200
     assert b'data-speak-word="starving"' in response.data
     assert "聽發音".encode("utf-8") in response.data
+
+
+def test_study_page_includes_distractor_word_cards():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get("/study")
+    assert response.status_code == 200
+    assert "afraid".encode("utf-8") in response.data
+    assert "害怕的".encode("utf-8") in response.data
+    assert b'data-speak-word="afraid"' in response.data
+
+
+def test_study_cards_include_every_battle_option_word():
+    card_words = {item["word"] for item in STARTER_WORDS}
+    option_words = set()
+    for item in STARTER_WORDS:
+        option_words.update(item.get("distractors", []))
+        option_words.update(item.get("similar", []))
+    for trap in CLOZE_TRAPS:
+        option_words.update(trap.get("options", []))
+
+    assert option_words <= card_words
 
 
 def test_stage_lesson_shows_meaning_pronunciation_before_practice():
@@ -215,6 +237,31 @@ def test_answer_uses_fast_dictionary_lookup_before_result(monkeypatch):
     assert response.status_code == 302
     assert observed_timeouts
     assert all(timeout is not None and timeout <= 1.2 for timeout in observed_timeouts)
+
+
+def test_fifth_campaign_answer_goes_to_summary_without_dictionary_lookup(monkeypatch):
+    app.config["TESTING"] = True
+
+    def forbidden_lookup(*args, **kwargs):
+        raise AssertionError("final campaign answer should not wait for result-page dictionary lookup")
+
+    monkeypatch.setattr("app.lookup_word", forbidden_lookup)
+    with app.test_client() as client:
+        client.get("/battle?chapter=1&stage=101&difficulty=beginner&restart=1")
+        with client.session_transaction() as session:
+            run = session["campaign_run"]
+            run["results"] = [
+                {"correct": True, "elapsed_ms": 500, "exp": 10, "coins": 3, "word": "starving", "answer": "starving", "selected": "starving", "prompt": "p"}
+                for _ in range(4)
+            ]
+            session["campaign_run"] = run
+        client.get("/battle?chapter=1&stage=101&difficulty=beginner")
+        with client.session_transaction() as session:
+            question = session["question"]
+        response = client.post("/answer", data={"selected": question["answer"]})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/level-summary")
 
 
 def test_battle_page_uses_clear_learning_instruction():

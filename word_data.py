@@ -104,6 +104,42 @@ CLOZE_TRAPS = [
     {"chapter":4,"prompt":"The article provides evidence _____ the hypothesis.","answer":"supporting","options":["support","supporting","supported","to support"],"explanation":"evidence supporting the hypothesis 是分詞片語，表示支持假設的證據。","memory":"名詞後面用 V-ing 可以補充說明它正在做的功能。"},
 ]
 
+def _option_word_chapters():
+    chapters = {}
+    for item in STARTER_WORDS:
+        chapter = int(item.get("chapter", 1) or 1)
+        for option in [*item.get("distractors", []), *item.get("similar", [])]:
+            chapters.setdefault(option, chapter)
+    for trap in CLOZE_TRAPS:
+        chapter = int(trap.get("chapter", 2) or 2)
+        for option in trap.get("options", []):
+            chapters.setdefault(option, chapter)
+    return chapters
+
+def _extra_study_cards():
+    existing = {item["word"] for item in STARTER_WORDS}
+    cards = []
+    for word, chapter in sorted(_option_word_chapters().items(), key=lambda pair: (pair[1], pair[0])):
+        if word in existing:
+            continue
+        zh = WORD_HINTS.get(word, "題目選項")
+        is_phrase = " " in word
+        cards.append({
+            "word": word,
+            "pos": "phrase" if is_phrase else "word",
+            "zh": zh,
+            "chapter": chapter,
+            "context": f"題目選項中可能會看到 {word}，先記住它和正確答案的差異。",
+            "example": f"Review the choice: {word}.",
+            "memory": f"{word} = {zh}。看到選項時，先想中文意思再判斷情境。",
+            "distractors": [],
+            "similar": [],
+        })
+    return cards
+
+STARTER_WORDS.extend(_extra_study_cards())
+WORD_HINTS = {item["word"]: item["zh"] for item in STARTER_WORDS}
+
 DAILY_MISSIONS = [
     {"key":"correct_5","title":"今天答對 5 題","target":5,"metric":"correct_answers","reward":20},
     {"key":"speak_3","title":"今天唸 3 個單字","target":3,"metric":"speech_attempts","reward":15},

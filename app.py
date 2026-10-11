@@ -260,7 +260,6 @@ def answer():
     if q.get("challenge_code"):
         combo=int(session.get("challenge_combo",0)); combo=combo+1 if result["correct"] else 0; session["challenge_combo"]=combo
         record_challenge_result(q["challenge_code"],p["id"],p["username"],result["correct"],elapsed,combo=combo)
-    analysis=build_wrong_answer_analysis(q,selected); dictionary=enrich_dictionary(word,lookup_result_dictionary(word) if word else None)
     item={"correct":bool(result["correct"]),"elapsed_ms":elapsed,"exp":result["exp"],"coins":result["coins"],"word":word,"answer":q.get("answer"),"selected":selected,"prompt":q.get("prompt")}
     if q.get("campaign_mode"):
         run=session.get("campaign_run") or {"results":[]}; run.setdefault("results",[]).append(item); session["campaign_run"]=run
@@ -276,6 +275,7 @@ def answer():
         if limit and len(run["results"])>=int(limit):
             session["practice_summary"]=run_summary(run["results"],int(limit)); session.pop("practice_run",None)
             return redirect(url_for("practice_summary"))
+    analysis=build_wrong_answer_analysis(q,selected); dictionary=enrich_dictionary(word,lookup_result_dictionary(word) if word else None)
     session["last_result"]={"question":q,"selected":selected,"result":result,"dictionary":dictionary,"analysis":analysis}
     return redirect(url_for("result"))
 
