@@ -251,7 +251,7 @@ def answer():
     selected=request.form.get("selected",""); speech_score=request.form.get("speech_score",type=int); protect=4 if has_item(p["id"],"memory_amulet") else 0
     speech_score=min(100,(speech_score or 0)+10) if q["mode"]=="speech" and has_item(p["id"],"pronunciation_wand") else speech_score
     result=grade_answer(q,selected,speech_score=speech_score,hp_protection=protect); session["mistake_streak"]=0 if result["correct"] else int(session.get("mistake_streak",0))+1
-    word=q["answer"].split()[0] if q["mode"] in {"shield","speech","review"} else q.get("answer","")
+    word=q.get("word") or (q["answer"].split()[0] if q["mode"] in {"shield","speech","review"} else q.get("answer",""))
     elapsed=max(0,int(time.time()*1000)-int(session.get("question_started_ms",int(time.time()*1000))))
     newly=apply_battle_result(p["id"],word,result["correct"],result["exp"],result["coins"],result["hp_delta"],q,selected,elapsed,result.get("speech_score"))
     for a in newly or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
@@ -261,9 +261,10 @@ def answer():
     item={"correct":bool(result["correct"]),"elapsed_ms":elapsed,"exp":result["exp"],"coins":result["coins"],"word":word,"answer":q.get("answer"),"selected":selected,"prompt":q.get("prompt")}
     if q.get("campaign_mode"):
         run=session.get("campaign_run") or {"results":[]}; run.setdefault("results",[]).append(item); session["campaign_run"]=run
-        if len(run["results"])>=5:
-            summary=run_summary(run["results"],campaign_total_for(run.get("chapter_id"),run.get("stage_id"))); summary.update({"stage_id":run.get("stage_id"),"chapter_id":run.get("chapter_id"),"difficulty":run.get("difficulty")})
-            achievements=record_stage_completion(p["id"],run.get("stage_id"),summary["stars"],summary["score"],completed=summary["correct"]>=3)
+        campaign_total=campaign_total_for(run.get("chapter_id"),run.get("stage_id"))
+        if len(run["results"])>=campaign_total:
+            summary=run_summary(run["results"],campaign_total); summary.update({"stage_id":run.get("stage_id"),"chapter_id":run.get("chapter_id"),"difficulty":run.get("difficulty")})
+            achievements=record_stage_completion(p["id"],run.get("stage_id"),summary["stars"],summary["score"],completed=summary["correct"]>=max(1,(campaign_total+1)//2))
             for a in achievements or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
             session["level_summary"]=summary; session.pop("campaign_run",None); session.pop("last_result",None)
             return redirect(url_for("level_summary"))

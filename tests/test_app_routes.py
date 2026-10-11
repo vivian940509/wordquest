@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+import database
 from app import app
 from word_data import CHAPTERS, CLOZE_TRAPS, STARTER_WORDS
 
@@ -155,9 +156,10 @@ def test_lesson_word_count_scales_by_school_level():
         for chapter, stage, expected in cases:
             response = client.get(f"/lesson?chapter={chapter}&stage={stage}&difficulty=beginner")
             html = response.data.decode("utf-8")
-            words = set(re.findall(r'data-speak-word="([^"]+)"', html))
+            words = re.findall(r'data-speak-word="([^"]+)"', html)
             assert response.status_code == 200
             assert len(words) == expected
+            assert len(set(words)) == expected
             assert f'data-card-total="{expected}"' in html
 
 
@@ -287,7 +289,7 @@ def test_answer_uses_fast_dictionary_lookup_before_result(monkeypatch):
     assert all(timeout is not None and timeout <= 1.2 for timeout in observed_timeouts)
 
 
-def test_fifth_campaign_answer_goes_to_summary_without_dictionary_lookup(monkeypatch):
+def test_final_campaign_answer_goes_to_summary_without_dictionary_lookup(monkeypatch):
     app.config["TESTING"] = True
 
     def forbidden_lookup(*args, **kwargs):
@@ -300,7 +302,7 @@ def test_fifth_campaign_answer_goes_to_summary_without_dictionary_lookup(monkeyp
             run = session["campaign_run"]
             run["results"] = [
                 {"correct": True, "elapsed_ms": 500, "exp": 10, "coins": 3, "word": "starving", "answer": "starving", "selected": "starving", "prompt": "p"}
-                for _ in range(4)
+                for _ in range(9)
             ]
             session["campaign_run"] = run
         client.get("/battle?chapter=1&stage=101&difficulty=beginner")
@@ -310,6 +312,46 @@ def test_fifth_campaign_answer_goes_to_summary_without_dictionary_lookup(monkeyp
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/level-summary")
+
+
+def test_campaign_question_totals_match_preview_count_for_all_school_levels(monkeypatch):
+    profile = database.ensure_guest_profile(username="Test Runner")
+    profile["unlocked_chapter"] = 4
+    monkeypatch.setattr("app.current_user", lambda: profile)
+    app.config["TESTING"] = True
+    cases = [(1, 101, 10), (2, 201, 15), (3, 301, 20), (4, 401, 25)]
+
+    with app.test_client() as client:
+        for chapter, stage, expected in cases:
+            lesson = client.get(f"/lesson?chapter={chapter}&stage={stage}&difficulty=beginner")
+            words = re.findall(r'data-speak-word="([^"]+)"', lesson.data.decode("utf-8"))
+            assert len(words) == expected
+            assert len(set(words)) == expected
+
+            client.get(f"/battle?chapter={chapter}&stage={stage}&difficulty=beginner&restart=1")
+            with client.session_transaction() as session:
+                run = session["campaign_run"]
+                run["results"] = [
+                    {"correct": True, "elapsed_ms": 500, "exp": 10, "coins": 3, "word": f"word-{i}", "answer": f"word-{i}", "selected": f"word-{i}", "prompt": "p"}
+                    for i in range(expected - 2)
+                ]
+                session["campaign_run"] = run
+
+            client.get(f"/battle?chapter={chapter}&stage={stage}&difficulty=beginner")
+            with client.session_transaction() as session:
+                question = session["question"]
+                assert question["campaign_total"] == expected
+            response = client.post("/answer", data={"selected": question["answer"]})
+            assert response.status_code == 302
+            assert response.headers["Location"].endswith("/result")
+
+            client.get(f"/battle?chapter={chapter}&stage={stage}&difficulty=beginner")
+            with client.session_transaction() as session:
+                question = session["question"]
+                assert question["campaign_total"] == expected
+            response = client.post("/answer", data={"selected": question["answer"]})
+            assert response.status_code == 302
+            assert response.headers["Location"].endswith("/level-summary")
 
 
 def test_battle_page_uses_clear_learning_instruction():
@@ -403,6 +445,47 @@ def test_campaign_battle_uses_stage_word_count_progress():
     assert response.status_code == 200
     assert "第 1/10 題" in html
     assert 'data-countdown="8"' in html
+
+
+def test_campaign_continues_until_stage_word_count():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        client.get("/battle?chapter=1&stage=101&difficulty=beginner&restart=1")
+        for _ in range(5):
+            with client.session_transaction() as session:
+                question = session["question"]
+            response = client.post("/answer", data={"selected": question["answer"]})
+            assert response.status_code == 302
+            assert response.headers["Location"].endswith("/result")
+            if _ < 4:
+                client.get("/battle?chapter=1&stage=101&difficulty=beginner")
+
+        with client.session_transaction() as session:
+            assert len(session["campaign_run"]["results"]) == 5
+            assert "level_summary" not in session
+
+
+def test_campaign_practices_each_preview_word_once_before_summary():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        lesson = client.get("/lesson?chapter=1&stage=101&difficulty=beginner")
+        preview_words = set(re.findall(r'data-speak-word="([^"]+)"', lesson.data.decode("utf-8")))
+        client.get("/battle?chapter=1&stage=101&difficulty=beginner&restart=1")
+
+        practiced_words = []
+        for index in range(10):
+            with client.session_transaction() as session:
+                question = session["question"]
+            practiced_words.append(question["word"])
+            response = client.post("/answer", data={"selected": question["answer"]})
+            assert response.status_code == 302
+            if index < 9:
+                assert response.headers["Location"].endswith("/result")
+                client.get("/battle?chapter=1&stage=101&difficulty=beginner")
+            else:
+                assert response.headers["Location"].endswith("/level-summary")
+
+        assert set(practiced_words) == preview_words
 
 
 def test_pronounce_audio_falls_back_to_google_when_dictionary_audio_fails(monkeypatch):
