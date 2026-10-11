@@ -233,6 +233,16 @@ def test_forgot_password_and_google_login_controls_exist():
     assert "使用 Google 登入" in html
 
 
+def test_register_page_has_google_signup_control():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response=client.get("/register")
+    html=response.data.decode("utf-8")
+    assert response.status_code == 200
+    assert "使用 Google 建立帳號" in html
+    assert 'href="/login/google"' in html
+
+
 def test_campaign_battle_has_five_question_progress():
     app.config["TESTING"] = True
     with app.test_client() as client:

@@ -1,91 +1,231 @@
-# WordQuest Project Design Spec
+# WordQuest 專案規格書
 
-**Date:** 2026-10-11
+**日期：** 2026-10-11
 
-## Purpose
+## 專案目的
 
-WordQuest is a browser-based English vocabulary learning game for Chinese-speaking learners. It turns vocabulary review into short quest rounds, lets learners preview meaning and pronunciation before practice, and records progress through stages, mistakes, vocabulary mastery, daily missions, achievements, shop items, and friend challenges.
+WordQuest 是一個給中文使用者學英文單字的網頁遊戲。它把單字學習包裝成闖關、戰鬥、任務、成就與裝備系統，讓使用者可以先預習單字意思與發音，再透過短回合練習累積熟練度、金幣、星星與錯題紀錄。
 
-## Users
+本專案的核心目標是：讓使用者可以用手機或桌機快速完成「看單字、聽發音、做題、看解析、複習錯題」的完整學習循環。
 
-- Learners who want short, repeatable English vocabulary practice.
-- Mobile users who may use Android browsers, embedded WebViews, or slow networks.
-- Returning users who expect progress, wrong words, equipment, achievements, and account state to persist.
+## 目標使用者
 
-## Product Scope
+- 想用短時間練英文單字的中文使用者。
+- 使用手機瀏覽器、Android WebView、內建瀏覽器或桌機瀏覽器的學習者。
+- 需要保存學習進度、錯題、任務、成就與帳號資料的回訪使用者。
 
-### Core Learning Flow
+## 產品範圍
 
-1. The learner enters the map or study page.
-2. A stage preview shows Chinese meaning, English word, context, memory hint, example sentence, and pronunciation.
-3. The learner starts a five-question battle or custom practice run.
-4. The app records answer correctness, elapsed time, vocabulary progress, mistakes, rewards, and stage completion.
-5. The result page gives answer analysis, dictionary/local explanation, pronunciation playback, and optional AI teacher explanation.
+### 主要學習流程
 
-### Game Modes
+1. 使用者進入首頁、學習頁或關卡地圖。
+2. 選擇章節與關卡後，先進入預習頁。
+3. 預習頁顯示中文意思、英文單字、情境句、記憶提示、例句與「聽發音」按鈕。
+4. 使用者開始練習後進入戰鬥題目。
+5. 題目依難度限制答題時間。
+6. 送出答案後，系統記錄正確率、作答時間、經驗值、金幣、血量變化、錯題與單字熟練度。
+7. 結果頁顯示答案分析、字典或本地提示、正確答案發音，以及 AI 老師補充解釋。
 
-- **Campaign stage:** five questions, stage progress, stars, score, and unlock flow.
-- **Practice:** wrong words, weak words, unmastered words, chapter-specific words, quick 10, challenge 30, and infinite mode.
-- **Review:** due vocabulary from spaced practice.
-- **Friend challenge:** challenge code, leaderboard, combo tracking.
-- **Speech challenge:** browser speech recognition estimates similarity to target text.
+### 闖關模式
 
-### Pronunciation Playback
+- 每個正式關卡共 5 題。
+- 完成後依正確題數與速度計算分數與星星。
+- 通過條件會影響下一關解鎖。
+- 每章包含多個關卡，整體課程涵蓋國小、國中、高中、大學四個程度。
 
-Pronunciation playback must be reliable on desktop and mobile.
+### 自訂練習模式
 
-- The visible button is `data-speak-word`.
-- The browser first tries same-origin audio from `/api/pronounce/audio?word=...`.
-- The server proxies dictionary audio when available.
-- The server falls back to Google Translate TTS audio when dictionary audio is missing or invalid.
-- The browser falls back to Web Speech API when same-origin audio cannot start quickly.
-- The user must not wait on slow third-party services before hearing a fallback.
+自訂練習頁提供以下模式：
 
-## Performance Requirements
+- 只練錯題。
+- 只練弱點。
+- 未馴服單字。
+- 指定章節。
+- 10 題快速練習。
+- 30 題挑戰。
+- 無限模式。
 
-- Pressing a pronunciation button must start audio or switch to browser TTS within 2 seconds under normal browser support.
-- The pronunciation proxy must use a short request budget and must not serially wait for multiple long third-party timeouts.
-- Successful pronunciation audio should be cached server-side for repeated words during the process lifetime.
-- Successful pronunciation responses should remain browser/CDN-cacheable with public cache headers.
-- Slow or unavailable dictionary services must not block battle answer submission, result pages, or pronunciation fallback.
+### 複習模式
 
-## Data Responsibilities
+- 系統根據使用者歷史紀錄找出需要複習的單字。
+- 複習題使用既有戰鬥頁與結果頁。
+- 複習結果會回寫學習進度與錯題資料。
 
-- `word_data.py` owns built-in curriculum, hints, missions, shop items, and achievements.
-- `battle_engine.py` owns question generation, answer grading, speech similarity, and wrong-answer analysis.
-- `database.py` owns persistence for profile, vocabulary, history, missions, achievements, shop, challenges, and analytics.
-- `dictionary_api.py` owns dictionary lookup against dictionaryapi.dev.
-- `app.py` owns Flask routes, session flow, authentication integrations, pronunciation proxying, and rendering.
-- `static/js/app.js` owns client interactions: countdown, speech recognition, pronunciation playback, lesson carousel, expandable copy, nav, and AI teacher requests.
+### 語音練習模式
 
-## Error Handling
+- 語音題使用瀏覽器 Speech Recognition。
+- 評分方式是「瀏覽器辨識文字」與「目標句」的文字相似度。
+- 目前不是音素級或聲學級專業發音評分。
+- 發音魔杖裝備可以提高語音題容錯。
 
-- Dictionary failures return local learning hints when possible.
-- Pronunciation proxy failures return a clear non-200 JSON response, allowing the browser to switch to Web Speech API.
-- Speech recognition failures leave the learner on the same page with retry feedback.
-- Login and Supabase failures flash user-readable messages.
+### 好友挑戰
 
-## Testing Requirements
+- 使用者可以建立挑戰碼。
+- 其他使用者可用挑戰碼加入。
+- 系統記錄挑戰結果、連擊與排行榜。
 
-- Flask route tests cover rendering, battle flow, pronunciation API behavior, and regression cases.
-- Pronunciation tests must cover dictionary audio fallback, Google TTS fallback, cache hit behavior, and timeout budget values.
-- Frontend timing constants for pronunciation fallback should be kept small and discoverable in `static/js/app.js`.
+### 任務、商店與成就
 
-## Current Pronunciation Latency Problem
+- 每日任務提供金幣獎勵。
+- 商店道具可購買與裝備。
+- 成就根據學習行為解鎖。
+- 使用者資料包含金幣、經驗值、血量、裝備、登入狀態與學習進度。
 
-The current implementation waits in a serial chain:
+## 發音播放規格
 
-- `lookup_word()` defaults to a 5 second dictionary API timeout.
-- Dictionary audio fetch waits up to 5 seconds.
-- Google TTS fetch waits up to 7 seconds.
-- The browser waits up to 7 seconds before falling back to Web Speech API.
+發音播放是本專案的重要體驗，尤其在手機上必須快速可靠。
 
-This can make a learner wait far longer than 2 seconds after pressing "聽發音".
+### 使用者體驗要求
 
-## Acceptance Criteria
+- 使用者按下「聽發音」後，2 秒內必須開始播放音訊，或切換到瀏覽器內建語音。
+- 不可以讓使用者長時間卡在「載入發音」。
+- 第三方字典或音檔服務變慢時，系統必須快速 fallback。
 
-- Existing tests continue to pass.
-- New pronunciation tests prove the audio proxy uses fast timeout values.
-- New pronunciation tests prove a successful word is served from process cache on the next request.
-- Frontend fallback timeout is reduced from 7 seconds to below 2 seconds.
-- Documentation states the project behavior and the pronunciation latency SLA.
+### 前端流程
+
+1. 使用者點擊 `data-speak-word` 按鈕。
+2. 前端先停止上一段音訊或朗讀。
+3. 前端優先播放同源音訊 `/api/pronounce/audio?word=...`。
+4. 如果同源音訊在指定時間內無法開始，前端立刻改用 Web Speech API。
+5. 如果 Web Speech API 也失敗，按鈕顯示可重試訊息。
+
+### 後端流程
+
+1. `/api/pronounce/audio` 收到單字。
+2. 檢查伺服器 process 內的成功音檔快取。
+3. 若快取命中，直接回傳音檔。
+4. 若快取未命中，使用短 timeout 查詢字典 metadata。
+5. 如果字典有可用真人音檔，短 timeout 抓取音檔。
+6. 如果字典音檔無效或逾時，短 timeout 改抓 Google TTS。
+7. 成功音檔寫入 process cache。
+8. 若全部失敗，回傳錯誤 JSON，讓前端改走瀏覽器 TTS。
+
+### 發音效能要求
+
+- 後端 pronunciation proxy 的整體外部請求預算應低於 2 秒。
+- 字典查詢不得使用長 timeout 阻塞發音。
+- 字典音檔與 Google TTS 不得各自等待 5 秒以上。
+- 前端同源音訊啟動等待時間必須低於 2 秒。
+- 成功音檔應保留 HTTP cache header，讓瀏覽器與 CDN 可快取。
+- 同一個單字在同一個 server process 中重複播放時，應優先使用 process cache。
+
+## 系統模組責任
+
+### `app.py`
+
+- Flask app 初始化。
+- 路由與頁面渲染。
+- 登入、註冊、Google callback、登出與帳號頁。
+- 闖關、作答、結果頁、關卡總結。
+- 自訂練習、複習、好友挑戰、每日任務、商店。
+- 字典 enrichment 與發音 proxy。
+- AI 老師 API。
+
+### `battle_engine.py`
+
+- 建立戰鬥題目。
+- 建立語音題。
+- 建立複習題。
+- 計算答案正確與獎勵。
+- 計算語音文字相似度。
+- 產生錯題分析。
+
+### `database.py`
+
+- 使用者 profile。
+- 單字熟練度。
+- 關卡進度。
+- 答題歷史。
+- 錯題與弱點查詢。
+- 每日任務。
+- 商店道具。
+- 好友挑戰。
+- 成就與學習分析。
+
+### `dictionary_api.py`
+
+- 查詢 dictionaryapi.dev。
+- 回傳單字、音標、音檔 URL 與英文解釋。
+- 查詢失敗時回傳可被本地提示取代的 fallback 結果。
+
+### `word_data.py`
+
+- 課程章節。
+- 內建單字。
+- 中文提示。
+- 每日任務。
+- 商店道具。
+- 成就定義。
+
+### `static/js/app.js`
+
+- 答題倒數。
+- 語音辨識題互動。
+- 發音播放與 fallback。
+- AI 老師按鈕。
+- 預習頁輪播。
+- 文字展開/收合。
+- 手機導覽列。
+
+### `templates/`
+
+- Jinja 頁面模板。
+- 首頁、登入、註冊、地圖、預習、戰鬥、結果、自訂練習、錯題、商店、好友、帳號等頁面。
+
+## 資料與狀態規格
+
+- 使用者未登入時，系統建立訪客 profile。
+- 使用者登入或註冊後，訪客進度應保留或合併到登入 profile。
+- 作答結果必須記錄正確答案、使用者答案、是否正確、作答時間、語音分數與題目 metadata。
+- 單字熟練度會根據作答結果更新。
+- 錯題與弱點由歷史紀錄與熟練度資料推導。
+- 關卡完成狀態、星星與分數需持久化。
+
+## 錯誤處理規格
+
+- 字典 API 無法連線時，頁面應使用本地中文提示，不讓學習流程中斷。
+- 發音第三方服務失敗時，前端應快速改用瀏覽器 TTS。
+- 語音辨識不可用時，頁面應提示使用者改用支援瀏覽器。
+- 登入、註冊、重設密碼與 Supabase 錯誤應顯示使用者可理解的 flash message。
+- 無效關卡、未解鎖關卡或不存在挑戰碼應導回安全頁面並顯示提示。
+
+## 測試規格
+
+### 必要測試範圍
+
+- 首頁與學習頁基本渲染。
+- 課程地圖與關卡總數。
+- 預習頁顯示中文意思、單字與發音按鈕。
+- 戰鬥頁倒數與答題表單。
+- 作答後導向結果頁。
+- 字典失敗時使用本地解釋。
+- 發音 API 回傳同源音訊。
+- 字典音檔失敗時 fallback 到 Google TTS。
+- 發音 proxy 使用短 timeout。
+- 發音成功結果會進 process cache。
+- 前端音訊 fallback 低於 2 秒。
+- 自訂練習模式選項。
+- 登入頁忘記密碼與 Google 登入控制項。
+
+### 驗證指令
+
+```powershell
+py -m pytest -q
+```
+
+在目前 Windows 環境中，`pytest` 與 `python` 指令可能不可用或指到 Microsoft Store stub，因此專案測試使用 `py -m pytest -q`。
+
+## 目前已知限制
+
+- 語音評分是文字辨識相似度，不是專業發音檢測。
+- 發音 process cache 只存在於單一 server process，不是跨部署持久快取。
+- Google TTS 是第三方服務，仍可能受網路、服務限制或部署環境影響。
+- 手機瀏覽器的 Web Speech API 支援度不一致，因此必須保留錯誤提示與重試路徑。
+
+## 驗收標準
+
+- 使用者能完成「預習 → 聽發音 → 練習 → 結果 → 複習」流程。
+- 按下「聽發音」後，正常情況 2 秒內開始音訊或切到瀏覽器 TTS。
+- 第三方字典或音檔服務變慢時，不會讓使用者等待 5 到 17 秒。
+- 現有測試與發音效能回歸測試皆通過。
+- 專案規格能說明整個 WordQuest 的產品範圍、模組責任、資料狀態、錯誤處理與測試要求。
