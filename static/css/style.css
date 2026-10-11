@@ -383,6 +383,27 @@ main {
     transform: translateY(-2px);
 }
 
+.word-card.answer-correct,
+.word-card.answer-correct:disabled {
+    border-color: var(--accent);
+    background: rgba(57, 214, 163, 0.2);
+    color: var(--text);
+}
+
+.word-card.answer-wrong,
+.word-card.answer-wrong:disabled {
+    border-color: #ff6b78;
+    background: rgba(255, 107, 120, 0.16);
+    color: var(--text);
+}
+
+.answer-flash {
+    grid-column: 1 / -1;
+    min-height: 28px;
+    color: var(--gold);
+    font-weight: 900;
+}
+
 .result-layout {
     display: grid;
     gap: 18px;

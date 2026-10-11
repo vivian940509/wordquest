@@ -188,6 +188,7 @@ def test_battle_page_uses_question_time_limit_after_preview():
     assert response.status_code == 200
     assert b'data-countdown="8"' in response.data
     assert b'data-answer-form' in response.data
+    assert b'data-correct-answer=' in response.data
 
 
 def test_pronounce_falls_back_to_same_origin_tts_when_dictionary_has_no_audio(monkeypatch):
@@ -594,7 +595,12 @@ def test_frontend_pronunciation_falls_back_within_two_seconds():
 def test_frontend_answer_submit_shows_immediate_feedback():
     js = (Path(app.root_path) / "static" / "js" / "app.js").read_text(encoding="utf-8")
 
-    assert "判定中…" in js
+    assert "答對！" in js
+    assert "答錯，正確答案是" in js
+    assert "dataset.correctAnswer" in js
+    assert "answer-correct" in js
+    assert "answer-wrong" in js
+    assert "setTimeout(()=>form.submit()" in js
     assert "form.addEventListener('submit'" in js
     assert "form.querySelectorAll('button').forEach" in js
     assert "hiddenSelected.name='selected'" in js
