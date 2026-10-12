@@ -21,6 +21,19 @@ def test_map_summary_uses_expanded_curriculum_totals():
     assert b"/900" in response.data
 
 
+def test_map_uses_numbered_stage_labels_instead_of_topic_titles():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.get("/map")
+
+    html = response.data.decode("utf-8")
+    assert response.status_code == 200
+    assert "第 1 關" in html
+    assert "第 2 關" in html
+    assert "餓肚子警報" not in html
+    assert "累到不行" not in html
+
+
 def test_map_page_uses_single_fast_snapshot(monkeypatch):
     app.config["TESTING"] = True
     calls = {"snapshot": 0, "progress": 0, "achievements": 0, "metrics": 0}
@@ -119,6 +132,8 @@ def test_stage_lesson_shows_meaning_pronunciation_before_practice():
     with app.test_client() as client:
         response = client.get("/lesson?chapter=1&stage=101&difficulty=beginner")
     assert response.status_code == 200
+    assert "第 1 關".encode("utf-8") in response.data
+    assert "餓肚子警報".encode("utf-8") not in response.data
     assert "starving".encode("utf-8") in response.data
     assert "餓到不行".encode("utf-8") in response.data
     assert b'data-speak-word="starving"' in response.data

@@ -4,7 +4,7 @@
 <section class="study-hero">
   <div>
     <p class="eyebrow">Before Practice</p>
-    <h1>{{ chapter.icon }} {{ stage.title if stage else chapter.title }}</h1>
+    <h1>{{ chapter.icon }} {{ '第 ' ~ (((stage_id|int) % 100) if stage else chapter.id) ~ ' 關' if stage else chapter.title }}</h1>
     <p>先看中文意思、英文單字與例句，聽完發音後再開始練習。</p>
   </div>
   <a class="primary-action" href="{{ url_for('battle',chapter=chapter.id,stage=stage_id,difficulty=difficulty) }}">開始練習</a>

@@ -47,14 +47,14 @@
         {% if stage_locked %}
           <div class="quest-node locked-node" aria-label="未解鎖關卡">
             <div class="node-orb">🔒</div>
-            <strong>{{ loop.index }}. {{ s.title }}</strong>
+            <strong>第 {{ loop.index }} 關</strong>
             <span>{{ {'beginner':'初級','intermediate':'中級','advanced':'高級'}[s.difficulty] }}</span>
             <small>先完成上一關</small>
           </div>
         {% else %}
           <a class="quest-node {{ 'done' if p and p.completed else '' }} {{ 'boss-node' if loop.last else '' }}" href="{{ url_for('lesson',chapter=chapter.id,stage=s.id,difficulty=s.difficulty) }}">
             <div class="node-orb">{{ '👑' if loop.last else ('✓' if p and p.completed else loop.index) }}</div>
-            <strong>{{ s.title }}</strong>
+            <strong>第 {{ loop.index }} 關</strong>
             <span>{{ {'beginner':'初級','intermediate':'中級','advanced':'高級'}[s.difficulty] }}</span>
             <small>{{ '★' * (p.stars if p else 0) }}{{ '☆' * (3-(p.stars if p else 0)) }}</small>
           </a>
