@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime, timezone, date, timedelta
 from zoneinfo import ZoneInfo
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 from battle_engine import next_review_time
 from word_data import ACHIEVEMENTS, CHAPTERS
 
@@ -418,12 +419,20 @@ def fetch_recent_mistakes(user_id, limit=10):
 def record_stage_completion(user_id, stage_id, stars, score, completed=True):
     """Commit one campaign run to stage progress exactly once at run completion."""
     if not stage_id: return
+    stored_stars=max(0,min(STAGE_MAX_STARS,int(stars)))
     with db_connection() as c:
-        c.execute(text("""INSERT INTO stage_progress(user_id,stage_id,stars,best_score,completed,attempts) VALUES(:u,:s,:stars,:score,:done,1)
+        params={"u":user_id,"s":stage_id,"stars":stored_stars,"score":int(score),"done":bool(completed)}
+        stmt=text("""INSERT INTO stage_progress(user_id,stage_id,stars,best_score,completed,attempts) VALUES(:u,:s,:stars,:score,:done,1)
         ON CONFLICT(user_id,stage_id) DO UPDATE SET stars=CASE WHEN stage_progress.stars>:stars THEN stage_progress.stars ELSE :stars END,
         best_score=CASE WHEN stage_progress.best_score>:score THEN stage_progress.best_score ELSE :score END,
-        completed=(stage_progress.completed OR :done),attempts=stage_progress.attempts+1,updated_at=CURRENT_TIMESTAMP"""),
-        {"u":user_id,"s":stage_id,"stars":max(0,min(STAGE_MAX_STARS,int(stars))),"score":int(score),"done":bool(completed)})
+        completed=(stage_progress.completed OR :done),attempts=stage_progress.attempts+1,updated_at=CURRENT_TIMESTAMP""")
+        try:
+            c.execute(stmt,params)
+        except IntegrityError:
+            if stored_stars<=3:
+                raise
+            params["stars"]=3
+            c.execute(stmt,params)
         if completed and int(stage_id)%100==len(next((c0["stages"] for c0 in CHAPTERS if c0["id"]==int(stage_id)//100), [])):
             next_ch=min(len(CHAPTERS),int(stage_id)//100+1)
             c.execute(text("UPDATE users_profile SET unlocked_chapter=CASE WHEN unlocked_chapter>:n THEN unlocked_chapter ELSE :n END WHERE id=:u"),{"n":next_ch,"u":user_id})

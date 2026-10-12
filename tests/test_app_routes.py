@@ -659,6 +659,7 @@ def test_frontend_answer_submit_shows_immediate_feedback():
     assert "button[name=\"selected\"]" in js
     assert "submitAnswer(button)" in js
     assert "form.submit()" in js
+    assert "requestAnimationFrame(()=>form.submit())" in js
     assert "setTimeout(()=>form.submit()" not in js
     assert "form.addEventListener('submit'" in js
     assert "form.querySelectorAll('button').forEach" in js

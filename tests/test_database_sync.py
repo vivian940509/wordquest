@@ -75,3 +75,36 @@ def test_battle_result_can_skip_achievement_refresh(monkeypatch, tmp_path):
     )
 
     assert result == []
+
+
+def test_stage_completion_retries_when_database_still_has_three_star_constraint(monkeypatch, tmp_path):
+    use_temp_database(monkeypatch, tmp_path)
+    profile = database.ensure_guest_profile(username="Nova")
+    original_db_connection = database.db_connection
+    calls = {"count": 0}
+
+    class ConstraintOnce:
+        def __init__(self, conn):
+            self.conn = conn
+
+        def execute(self, statement, params=None):
+            sql = str(statement)
+            if "INSERT INTO stage_progress" in sql and params and params.get("stars") == 5 and calls["count"] == 0:
+                calls["count"] += 1
+                raise database.IntegrityError("stars check", params, Exception("stars between 0 and 3"))
+            return self.conn.execute(statement, params or {})
+
+        def __getattr__(self, name):
+            return getattr(self.conn, name)
+
+    @database.contextmanager
+    def flaky_connection():
+        with original_db_connection() as conn:
+            yield ConstraintOnce(conn)
+
+    monkeypatch.setattr(database, "db_connection", flaky_connection)
+
+    database.record_stage_completion(profile["id"], 101, stars=5, score=100, completed=True)
+
+    progress = database.fetch_stage_progress(profile["id"])
+    assert progress[101]["stars"] == 3
