@@ -201,7 +201,7 @@ def test_battle_page_uses_question_time_limit_after_preview():
     with app.test_client() as client:
         response = client.get("/battle?chapter=1&stage=101&difficulty=beginner")
     assert response.status_code == 200
-    assert b'data-countdown="5"' in response.data
+    assert b'data-countdown="8"' in response.data
     assert b'data-answer-form' in response.data
     assert b'data-correct-answer=' in response.data
 
@@ -460,7 +460,7 @@ def test_campaign_battle_uses_stage_word_count_progress():
     html=response.data.decode("utf-8")
     assert response.status_code == 200
     assert "第 1/10 題" in html
-    assert 'data-countdown="5"' in html
+    assert 'data-countdown="8"' in html
 
 
 def test_perfect_campaign_summary_awards_five_stars():
@@ -649,6 +649,7 @@ def test_frontend_pronunciation_falls_back_within_two_seconds():
 
 def test_frontend_answer_submit_shows_immediate_feedback():
     js = (Path(app.root_path) / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    css = (Path(app.root_path) / "static" / "css" / "style.css").read_text(encoding="utf-8")
 
     assert "答對，下一題載入中…" in js
     assert "答錯，解析載入中… 正確答案是" in js
@@ -656,12 +657,16 @@ def test_frontend_answer_submit_shows_immediate_feedback():
     assert "answer-correct" in js
     assert "answer-wrong" in js
     assert "submitAnswer=chosen=>" in js
-    assert "button[name=\"selected\"]" in js
-    assert "submitAnswer(button)" in js
+    assert "closest('button[name=\"selected\"]')" in js
+    assert "handleAnswerPress" in js
+    assert "pointerup" in js
+    assert "touchend" in js
+    assert "click" in js
     assert "form.submit()" in js
-    assert "requestAnimationFrame(()=>form.submit())" in js
+    assert "requestAnimationFrame(()=>form.submit())" not in js
     assert "setTimeout(()=>form.submit()" not in js
     assert "form.addEventListener('submit'" in js
     assert "form.querySelectorAll('button').forEach" in js
     assert "hiddenSelected.name='selected'" in js
     assert "hiddenSelected.value=chosen?.value||''" in js
+    assert "touch-action: manipulation" in css

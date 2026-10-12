@@ -353,6 +353,7 @@ main {
     place-items: center;
     padding: 18px;
     animation: cardEnter 0.42s ease both;
+    touch-action: manipulation;
 }
 
 .word-card:nth-child(2) {
