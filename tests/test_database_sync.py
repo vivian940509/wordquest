@@ -42,3 +42,36 @@ def test_existing_auth_profile_merges_guest_progress_on_login(monkeypatch, tmp_p
     assert vocab["starving"]["proficiency_level"] == 4
     with database.db_connection() as conn:
         assert conn.execute(database.text("SELECT 1 FROM users_profile WHERE id=:id"), {"id": guest["id"]}).first() is None
+
+
+def test_stage_completion_can_store_five_stars(monkeypatch, tmp_path):
+    use_temp_database(monkeypatch, tmp_path)
+    profile = database.ensure_guest_profile(username="Nova")
+
+    database.record_stage_completion(profile["id"], 101, stars=5, score=100, completed=True)
+
+    progress = database.fetch_stage_progress(profile["id"])
+    assert progress[101]["stars"] == 5
+
+
+def test_battle_result_can_skip_achievement_refresh(monkeypatch, tmp_path):
+    use_temp_database(monkeypatch, tmp_path)
+    profile = database.ensure_guest_profile(username="Nova")
+
+    def forbidden_refresh(user_id):
+        raise AssertionError("intermediate campaign answers should not run achievement aggregation")
+
+    monkeypatch.setattr(database, "refresh_achievements", forbidden_refresh)
+
+    result = database.apply_battle_result(
+        profile["id"],
+        "careful",
+        True,
+        exp=10,
+        coins=3,
+        question={"chapter_id": 1, "stage_id": 101, "difficulty": "beginner", "mode": "shield", "prompt": "p", "answer": "careful", "defer_stage_progress": True},
+        selected="careful",
+        check_achievements=False,
+    )
+
+    assert result == []

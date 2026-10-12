@@ -12,6 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_DATABASE_URL = f"sqlite:///{(BASE_DIR / 'database' / 'wordquest.local.db').as_posix()}"
 _initialized_database_urls = set()
 APP_TZ = ZoneInfo(os.getenv("APP_TIMEZONE", "Asia/Taipei"))
+STAGE_MAX_STARS = 5
 
 def app_today(): return datetime.now(APP_TZ).date()
 
@@ -49,6 +50,8 @@ def _initialize_database(engine):
             c.execute(text("ALTER TABLE IF EXISTS public.user_vocabulary ADD COLUMN IF NOT EXISTS weak_word boolean NOT NULL DEFAULT false"))
             c.execute(text("ALTER TABLE IF EXISTS public.user_vocabulary ADD COLUMN IF NOT EXISTS last_wrong_at timestamptz"))
             c.execute(text("UPDATE public.user_vocabulary SET weak_word = (mistake_count >= 3) WHERE weak_word IS DISTINCT FROM (mistake_count >= 3)"))
+            c.execute(text("ALTER TABLE IF EXISTS public.stage_progress DROP CONSTRAINT IF EXISTS stage_progress_stars_check"))
+            c.execute(text("ALTER TABLE IF EXISTS public.stage_progress ADD CONSTRAINT stage_progress_stars_check CHECK (stars BETWEEN 0 AND 5)"))
     _initialized_database_urls.add(url)
 
 @contextmanager
@@ -204,7 +207,7 @@ def fetch_profile(user_id):
     with db_connection() as c:
         r=c.execute(text("SELECT * FROM users_profile WHERE id=:id"),{"id":user_id}).mappings().first(); return dict(r) if r else None
 
-def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question=None, selected="", response_ms=0, speech_score=None):
+def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question=None, selected="", response_ms=0, speech_score=None, check_achievements=True):
     with db_connection() as c:
         c.execute(text("UPDATE users_profile SET exp=exp+:e, coins=coins+:co, hp=CASE WHEN hp+:hp < 0 THEN 0 WHEN hp+:hp > 100 THEN 100 ELSE hp+:hp END, level=1+((exp+:e)/100) WHERE id=:u"),{"u":user_id,"e":exp,"co":coins,"hp":hp_delta})
         was_review=False
@@ -220,7 +223,7 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
             st=question.get("stage_id")
             if st and not question.get("defer_stage_progress"):
                 limit_ms=max(1000,int(question.get("time_limit",12))*1000)
-                stars=(3 if response_ms and response_ms<=limit_ms*0.4 else 2 if response_ms and response_ms<=limit_ms*0.75 else 1) if correct else 0
+                stars=(5 if response_ms and response_ms<=limit_ms*0.4 else 4 if response_ms and response_ms<=limit_ms*0.6 else 3 if response_ms and response_ms<=limit_ms*0.75 else 2) if correct else 0
                 score=max(40,100-min(int(response_ms/max(limit_ms/35,1)),35)) if correct else 0
                 c.execute(text("""INSERT INTO stage_progress(user_id,stage_id,stars,best_score,completed,attempts) VALUES(:u,:s,:stars,:score,:done,1)
                 ON CONFLICT(user_id,stage_id) DO UPDATE SET stars=CASE WHEN stage_progress.stars>:stars THEN stage_progress.stars ELSE :stars END,best_score=CASE WHEN stage_progress.best_score>:score THEN stage_progress.best_score ELSE :score END,completed=(stage_progress.completed OR :done),attempts=stage_progress.attempts+1,updated_at=CURRENT_TIMESTAMP"""),{"u":user_id,"s":st,"stars":stars,"score":score,"done":bool(correct)})
@@ -233,7 +236,7 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
             ON CONFLICT(user_id,progress_date) DO UPDATE SET {metric}=daily_progress.{metric}+1"""),{"u":user_id,"today":app_today().isoformat()})
 
     # Achievement checks are idempotent; rewards are granted only on first unlock.
-    return refresh_achievements(user_id)
+    return refresh_achievements(user_id) if check_achievements else []
 
 
 def fetch_vocabulary(user_id):
@@ -420,7 +423,7 @@ def record_stage_completion(user_id, stage_id, stars, score, completed=True):
         ON CONFLICT(user_id,stage_id) DO UPDATE SET stars=CASE WHEN stage_progress.stars>:stars THEN stage_progress.stars ELSE :stars END,
         best_score=CASE WHEN stage_progress.best_score>:score THEN stage_progress.best_score ELSE :score END,
         completed=(stage_progress.completed OR :done),attempts=stage_progress.attempts+1,updated_at=CURRENT_TIMESTAMP"""),
-        {"u":user_id,"s":stage_id,"stars":max(0,min(3,int(stars))),"score":int(score),"done":bool(completed)})
+        {"u":user_id,"s":stage_id,"stars":max(0,min(STAGE_MAX_STARS,int(stars))),"score":int(score),"done":bool(completed)})
         if completed and int(stage_id)%100==len(next((c0["stages"] for c0 in CHAPTERS if c0["id"]==int(stage_id)//100), [])):
             next_ch=min(len(CHAPTERS),int(stage_id)//100+1)
             c.execute(text("UPDATE users_profile SET unlocked_chapter=CASE WHEN unlocked_chapter>:n THEN unlocked_chapter ELSE :n END WHERE id=:u"),{"n":next_ch,"u":user_id})

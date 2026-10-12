@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 
 import database
-from app import app
+from app import app, run_summary
 from word_data import CHAPTERS, CLOZE_TRAPS, STARTER_WORDS
 
 
@@ -18,7 +18,7 @@ def test_map_summary_uses_expanded_curriculum_totals():
         response = client.get("/map")
     assert response.status_code == 200
     assert b"/300" in response.data
-    assert b"/900" in response.data
+    assert b"/1500" in response.data
 
 
 def test_map_uses_numbered_stage_labels_instead_of_topic_titles():
@@ -46,7 +46,7 @@ def test_map_page_uses_single_fast_snapshot(monkeypatch):
         return {
             "progress": {},
             "earned": set(),
-            "metrics": {"completed_stages": 0, "total_stars": 0, "total_stages": 300, "max_stars": 900},
+            "metrics": {"completed_stages": 0, "total_stars": 0, "total_stages": 300, "max_stars": 1500},
         }
 
     def forbidden(*args, **kwargs):
@@ -64,7 +64,7 @@ def test_map_page_uses_single_fast_snapshot(monkeypatch):
     assert response.status_code == 200
     assert calls["snapshot"] == 1
     assert b"/300" in response.data
-    assert b"/900" in response.data
+    assert b"/1500" in response.data
 
 
 def test_home_points_to_study_before_battle():
@@ -463,6 +463,14 @@ def test_campaign_battle_uses_stage_word_count_progress():
     assert 'data-countdown="5"' in html
 
 
+def test_perfect_campaign_summary_awards_five_stars():
+    results = [{"correct": True, "elapsed_ms": 500, "exp": 10, "coins": 3} for _ in range(10)]
+
+    summary = run_summary(results, total=10)
+
+    assert summary["stars"] == 5
+
+
 def test_campaign_continues_until_stage_word_count():
     app.config["TESTING"] = True
     with app.test_client() as client:
@@ -642,14 +650,17 @@ def test_frontend_pronunciation_falls_back_within_two_seconds():
 def test_frontend_answer_submit_shows_immediate_feedback():
     js = (Path(app.root_path) / "static" / "js" / "app.js").read_text(encoding="utf-8")
 
-    assert "答對！" in js
-    assert "答錯，正確答案是" in js
+    assert "答對，下一題載入中…" in js
+    assert "答錯，解析載入中… 正確答案是" in js
     assert "dataset.correctAnswer" in js
     assert "answer-correct" in js
     assert "answer-wrong" in js
-    assert "form.submit();return" in js
+    assert "submitAnswer=chosen=>" in js
+    assert "button[name=\"selected\"]" in js
+    assert "submitAnswer(button)" in js
+    assert "form.submit()" in js
     assert "setTimeout(()=>form.submit()" not in js
     assert "form.addEventListener('submit'" in js
     assert "form.querySelectorAll('button').forEach" in js
     assert "hiddenSelected.name='selected'" in js
-    assert "hiddenSelected.value=chosen.value" in js
+    assert "hiddenSelected.value=chosen?.value||''" in js

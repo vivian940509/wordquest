@@ -56,7 +56,7 @@
             <div class="node-orb">{{ '👑' if loop.last else ('✓' if p and p.completed else loop.index) }}</div>
             <strong>第 {{ loop.index }} 關</strong>
             <span>{{ {'beginner':'初級','intermediate':'中級','advanced':'高級'}[s.difficulty] }}</span>
-            <small>{{ '★' * (p.stars if p else 0) }}{{ '☆' * (3-(p.stars if p else 0)) }}</small>
+            <small>{{ '★' * (p.stars if p else 0) }}{{ '☆' * (5-(p.stars if p else 0)) }}</small>
           </a>
         {% endif %}
       </div>

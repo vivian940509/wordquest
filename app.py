@@ -19,6 +19,7 @@ PRONUNCIATION_LOOKUP_TIMEOUT_SECONDS = 0.6
 PRONUNCIATION_AUDIO_TIMEOUT_SECONDS = 0.8
 PRONUNCIATION_CACHE_SECONDS = 86400
 RESULT_DICTIONARY_TIMEOUT_SECONDS = 0.8
+STAGE_MAX_STARS = 5
 
 def campaign_total_for(chapter, stage=None):
     words = stage_words(chapter, stage)
@@ -61,7 +62,7 @@ def run_summary(results,total=5):
     attempts=len(results); correct=sum(1 for x in results if x.get("correct")); elapsed=sum(int(x.get("elapsed_ms",0) or 0) for x in results)
     avg=round(elapsed/max(attempts,1)/1000,1); exp=sum(int(x.get("exp",0) or 0) for x in results); coins=sum(int(x.get("coins",0) or 0) for x in results)
     accuracy=round(100*correct/max(attempts,1)) if attempts else 0
-    stars=3 if total and correct>=total else 2 if total and correct>=max(total-1,1) else 1 if correct>=max(1,(total+1)//2) else 0
+    stars=5 if total and correct>=total else 4 if total and correct>=max(total-1,1) else 3 if total and correct>=max(total-2,1) else 2 if correct>=max(1,(total+1)//2) else 1 if correct>0 else 0
     wrong=[x for x in results if not x.get("correct")]
     counts={}
     for x in wrong:
@@ -171,7 +172,7 @@ def logout():
 @app.get("/account")
 def account():
     p=current_user(); vocab=fetch_vocabulary(p["id"]); progress=fetch_stage_progress(p["id"]); mistakes=fetch_recent_mistakes(p["id"],5)
-    total_stages=sum(len(chapter["stages"]) for chapter in CHAPTERS); max_stars=total_stages*3
+    total_stages=sum(len(chapter["stages"]) for chapter in CHAPTERS); max_stars=total_stages*STAGE_MAX_STARS
     stats={"words":len(vocab),"completed":sum(1 for x in progress.values() if x.get("completed")),"stars":sum(int(x.get("stars",0) or 0) for x in progress.values()),"mistakes":len(mistakes),"due":len(fetch_due_vocabulary(p["id"])),"total_stages":total_stages,"max_stars":max_stars}
     analytics=fetch_learning_analytics(p["id"])
     return render_template("account.html",profile=p,stats=stats,analytics=analytics,auth_email=session.get("auth_email"))
@@ -198,12 +199,12 @@ def map_page():
     p=current_user(); snapshot=fetch_map_snapshot(p["id"]); progress=snapshot["progress"]; earned=snapshot["earned"]
     chapter_stats={}
     total_stages=sum(len(chapter["stages"]) for chapter in CHAPTERS)
-    max_stars=total_stages*3
+    max_stars=total_stages*STAGE_MAX_STARS
     for chapter in CHAPTERS:
         ids=[s["id"] for s in chapter["stages"]]
         done=sum(1 for sid in ids if progress.get(sid,{}).get("completed"))
         stars=sum(int(progress.get(sid,{}).get("stars",0) or 0) for sid in ids)
-        chapter_stats[chapter["id"]]={"done":done,"total":len(ids),"stars":stars,"max_stars":len(ids)*3,"percent":round(100*done/max(len(ids),1))}
+        chapter_stats[chapter["id"]]={"done":done,"total":len(ids),"stars":stars,"max_stars":len(ids)*STAGE_MAX_STARS,"percent":round(100*done/max(len(ids),1))}
     metrics=snapshot["metrics"]; metrics.update({"total_stages":total_stages,"max_stars":max_stars})
     return render_template("map.html",profile=p,chapters=CHAPTERS,progress=progress,chapter_stats=chapter_stats,achievements=ACHIEVEMENTS,earned=earned,metrics=metrics)
 @app.get("/lesson")
@@ -253,7 +254,7 @@ def answer():
     result=grade_answer(q,selected,speech_score=speech_score,hp_protection=protect); session["mistake_streak"]=0 if result["correct"] else int(session.get("mistake_streak",0))+1
     word=q.get("word") or (q["answer"].split()[0] if q["mode"] in {"shield","speech","review"} else q.get("answer",""))
     elapsed=max(0,int(time.time()*1000)-int(session.get("question_started_ms",int(time.time()*1000))))
-    newly=apply_battle_result(p["id"],word,result["correct"],result["exp"],result["coins"],result["hp_delta"],q,selected,elapsed,result.get("speech_score"))
+    newly=apply_battle_result(p["id"],word,result["correct"],result["exp"],result["coins"],result["hp_delta"],q,selected,elapsed,result.get("speech_score"),check_achievements=not q.get("campaign_mode"))
     for a in newly or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
     if q.get("challenge_code"):
         combo=int(session.get("challenge_combo",0)); combo=combo+1 if result["correct"] else 0; session["challenge_combo"]=combo

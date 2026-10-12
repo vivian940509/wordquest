@@ -24,7 +24,7 @@ create table if not exists public.answer_history (
 );
 create table if not exists public.stage_progress (
   user_id uuid not null references public.users_profile(id) on delete cascade, stage_id int not null,
-  stars int not null default 0 check (stars between 0 and 3), best_score int not null default 0,
+  stars int not null default 0 check (stars between 0 and 5), best_score int not null default 0,
   completed boolean not null default false, attempts int not null default 0, updated_at timestamptz not null default now(),
   primary key(user_id, stage_id)
 );
@@ -104,3 +104,5 @@ exception when duplicate_object then null; end $$;
 alter table public.user_vocabulary add column if not exists weak_word boolean not null default false;
 alter table public.user_vocabulary add column if not exists last_wrong_at timestamptz;
 update public.user_vocabulary set weak_word = (mistake_count >= 3);
+alter table public.stage_progress drop constraint if exists stage_progress_stars_check;
+alter table public.stage_progress add constraint stage_progress_stars_check check (stars between 0 and 5);
