@@ -65,12 +65,106 @@ def ensure_guest_profile(user_id=None, username="勇者"):
     return fetch_profile(user_id)
 
 
+def _json_list(value):
+    if isinstance(value, list): return value
+    if value is None: return []
+    try: return json.loads(value)
+    except (TypeError, json.JSONDecodeError): return []
+
+
+def _merge_profile_data(c, source_user_id, target_user_id):
+    """Merge a browser guest profile into the signed-in profile used across devices."""
+    if not source_user_id or source_user_id == target_user_id:
+        return
+    source=c.execute(text("SELECT * FROM users_profile WHERE id=:id"),{"id":source_user_id}).mappings().first()
+    target=c.execute(text("SELECT * FROM users_profile WHERE id=:id"),{"id":target_user_id}).mappings().first()
+    if not source or not target or source.get("auth_user_id"):
+        return
+
+    c.execute(text("""UPDATE users_profile SET
+        exp=exp+:exp, coins=coins+:coins,
+        hp=CASE WHEN hp>:hp THEN hp ELSE :hp END,
+        level=CASE WHEN level>:level THEN level ELSE :level END,
+        current_streak=CASE WHEN current_streak>:streak THEN current_streak ELSE :streak END,
+        streak_freezes=streak_freezes+:freezes,
+        unlocked_chapter=CASE WHEN unlocked_chapter>:chapter THEN unlocked_chapter ELSE :chapter END,
+        equipped_gear=CASE WHEN COALESCE(equipped_gear,'')='' THEN :gear ELSE equipped_gear END
+        WHERE id=:target"""),{
+        "target":target_user_id,
+        "exp":int(source.get("exp") or 0),
+        "coins":int(source.get("coins") or 0),
+        "hp":int(source.get("hp") or 100),
+        "level":int(source.get("level") or 1),
+        "streak":int(source.get("current_streak") or 1),
+        "freezes":int(source.get("streak_freezes") or 0),
+        "chapter":int(source.get("unlocked_chapter") or 1),
+        "gear":source.get("equipped_gear") or "",
+    })
+
+    c.execute(text("""INSERT INTO stage_progress(user_id,stage_id,stars,best_score,completed,attempts,updated_at)
+        SELECT :target,stage_id,stars,best_score,completed,attempts,updated_at FROM stage_progress WHERE user_id=:source
+        ON CONFLICT(user_id,stage_id) DO UPDATE SET
+        stars=CASE WHEN stage_progress.stars>excluded.stars THEN stage_progress.stars ELSE excluded.stars END,
+        best_score=CASE WHEN stage_progress.best_score>excluded.best_score THEN stage_progress.best_score ELSE excluded.best_score END,
+        completed=(stage_progress.completed OR excluded.completed),
+        attempts=stage_progress.attempts+excluded.attempts,
+        updated_at=CURRENT_TIMESTAMP"""),{"source":source_user_id,"target":target_user_id})
+
+    c.execute(text("""INSERT INTO user_vocabulary(user_id,word,proficiency_level,next_review_time,mistake_count,correct_count,weak_word,last_wrong_at,last_seen_at)
+        SELECT :target,word,proficiency_level,next_review_time,mistake_count,correct_count,weak_word,last_wrong_at,last_seen_at
+        FROM user_vocabulary WHERE user_id=:source
+        ON CONFLICT(user_id,word) DO UPDATE SET
+        proficiency_level=CASE WHEN user_vocabulary.proficiency_level>excluded.proficiency_level THEN user_vocabulary.proficiency_level ELSE excluded.proficiency_level END,
+        next_review_time=CASE WHEN user_vocabulary.next_review_time<excluded.next_review_time THEN user_vocabulary.next_review_time ELSE excluded.next_review_time END,
+        mistake_count=user_vocabulary.mistake_count+excluded.mistake_count,
+        correct_count=user_vocabulary.correct_count+excluded.correct_count,
+        weak_word=(user_vocabulary.weak_word OR excluded.weak_word),
+        last_wrong_at=CASE
+            WHEN user_vocabulary.last_wrong_at IS NULL THEN excluded.last_wrong_at
+            WHEN excluded.last_wrong_at IS NULL THEN user_vocabulary.last_wrong_at
+            WHEN user_vocabulary.last_wrong_at>excluded.last_wrong_at THEN user_vocabulary.last_wrong_at
+            ELSE excluded.last_wrong_at END,
+        last_seen_at=CURRENT_TIMESTAMP"""),{"source":source_user_id,"target":target_user_id})
+
+    for row in c.execute(text("SELECT * FROM daily_progress WHERE user_id=:source"),{"source":source_user_id}).mappings().all():
+        existing=c.execute(text("SELECT * FROM daily_progress WHERE user_id=:target AND progress_date=:day"),{"target":target_user_id,"day":row["progress_date"]}).mappings().first()
+        if existing:
+            claimed=list(dict.fromkeys(_json_list(existing.get("claimed_json"))+_json_list(row.get("claimed_json"))))
+            payload=json.dumps(claimed,ensure_ascii=False)
+            c.execute(text("""UPDATE daily_progress SET
+                correct_answers=correct_answers+:correct,
+                speech_attempts=speech_attempts+:speech,
+                review_attempts=review_attempts+:review,
+                claimed_json=:claimed
+                WHERE user_id=:target AND progress_date=:day"""),{"target":target_user_id,"day":row["progress_date"],"correct":int(row.get("correct_answers") or 0),"speech":int(row.get("speech_attempts") or 0),"review":int(row.get("review_attempts") or 0),"claimed":payload})
+        else:
+            c.execute(text("""INSERT INTO daily_progress(user_id,progress_date,correct_answers,speech_attempts,review_attempts,claimed_json)
+                VALUES(:target,:day,:correct,:speech,:review,:claimed)"""),{"target":target_user_id,"day":row["progress_date"],"correct":int(row.get("correct_answers") or 0),"speech":int(row.get("speech_attempts") or 0),"review":int(row.get("review_attempts") or 0),"claimed":row.get("claimed_json") or "[]"})
+
+    c.execute(text("""INSERT INTO user_items(user_id,item_key,quantity,equipped,acquired_at)
+        SELECT :target,item_key,quantity,equipped,acquired_at FROM user_items WHERE user_id=:source
+        ON CONFLICT(user_id,item_key) DO UPDATE SET
+        quantity=user_items.quantity+excluded.quantity,
+        equipped=(user_items.equipped OR excluded.equipped)"""),{"source":source_user_id,"target":target_user_id})
+    c.execute(text("""INSERT INTO user_achievements(user_id,achievement_key,earned_at)
+        SELECT :target,achievement_key,earned_at FROM user_achievements WHERE user_id=:source
+        ON CONFLICT(user_id,achievement_key) DO NOTHING"""),{"source":source_user_id,"target":target_user_id})
+
+    for table in ("answer_history","challenges","challenge_results"):
+        column="creator_user_id" if table=="challenges" else "user_id"
+        c.execute(text(f"UPDATE {table} SET {column}=:target WHERE {column}=:source"),{"source":source_user_id,"target":target_user_id})
+    for table in ("stage_progress","user_vocabulary","daily_progress","user_items","user_achievements"):
+        c.execute(text(f"DELETE FROM {table} WHERE user_id=:source"),{"source":source_user_id})
+    c.execute(text("DELETE FROM users_profile WHERE id=:source"),{"source":source_user_id})
+
 
 def ensure_auth_profile(auth_user_id, username="勇者", guest_user_id=None):
     """Return the profile linked to a Supabase Auth user, preserving a guest profile when possible."""
     with db_connection() as c:
         existing=c.execute(text("SELECT * FROM users_profile WHERE auth_user_id=:a"),{"a":auth_user_id}).mappings().first()
-        if existing: return dict(existing)
+        if existing:
+            _merge_profile_data(c, guest_user_id, existing["id"])
+            return dict(c.execute(text("SELECT * FROM users_profile WHERE id=:id"),{"id":existing["id"]}).mappings().first())
         if guest_user_id:
             guest=c.execute(text("SELECT * FROM users_profile WHERE id=:id"),{"id":guest_user_id}).mappings().first()
             if guest and not guest.get("auth_user_id"):
