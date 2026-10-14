@@ -119,6 +119,20 @@ def test_study_cards_do_not_include_cloze_grammar_forms():
     assert {"saw", "seen", "told", "ordered", "synthesized"}.isdisjoint(card_words)
 
 
+def test_cloze_review_bank_has_complete_well_formed_questions():
+    assert len(CLOZE_TRAPS) >= 20
+    assert {item["chapter"] for item in CLOZE_TRAPS} == {1, 2, 3, 4}
+
+    for item in CLOZE_TRAPS:
+        assert set(item) >= {"chapter", "prompt", "answer", "options", "explanation", "memory"}
+        assert item["prompt"].count("_____") == 1
+        assert item["answer"] in item["options"]
+        assert len(item["options"]) == 4
+        assert len(set(item["options"])) == 4
+        assert item["explanation"]
+        assert item["memory"]
+
+
 def test_each_chapter_has_at_least_ten_unique_word_cards():
     assert len({item["word"] for item in STARTER_WORDS}) >= 5000
     for chapter in CHAPTERS:

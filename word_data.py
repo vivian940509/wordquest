@@ -113,11 +113,31 @@ WORD_HINTS.update({
 })
 
 CLOZE_TRAPS = [
+    {"chapter":1,"prompt":"I _____ breakfast at seven every morning.","answer":"eat","options":["eat","eats","ate","eating"],"explanation":"主詞是 I，現在簡單式用原形動詞 eat。","memory":"I / you / we / they 搭配現在式原形動詞。"},
+    {"chapter":1,"prompt":"She _____ to school by bus.","answer":"goes","options":["go","goes","going","went"],"explanation":"主詞 She 是第三人稱單數，現在簡單式動詞要加 s/es，所以選 goes。","memory":"he / she / it 現在式動詞記得加 s 或 es。"},
+    {"chapter":1,"prompt":"There _____ two books on the desk.","answer":"are","options":["is","are","was","be"],"explanation":"two books 是複數，所以 there be 句型要用 are。","memory":"There is + 單數；There are + 複數。"},
+    {"chapter":1,"prompt":"Please be quiet _____ class.","answer":"in","options":["in","on","at","for"],"explanation":"in class 表示在課堂中，是常見固定用法。","memory":"在課堂中說 in class。"},
+    {"chapter":1,"prompt":"This question is _____ than that one.","answer":"easier","options":["easy","easier","easiest","easily"],"explanation":"句中有 than，要用比較級 easier。","memory":"看到 than，先想到比較級。"},
     {"chapter":2,"prompt":"I look forward to _____ you soon.","answer":"seeing","options":["see","seeing","saw","seen"],"explanation":"look forward to 後面的 to 是介系詞，所以要接名詞或 V-ing；因此選 seeing。","memory":"看到 look forward to，直接想到後面接 V-ing。"},
     {"chapter":2,"prompt":"She is good at _____ stories.","answer":"telling","options":["tell","telling","told","to tell"],"explanation":"be good at 的 at 是介系詞，後面接 V-ing，所以是 telling stories。","memory":"介系詞 at 後面遇到動詞，通常變成 V-ing。"},
+    {"chapter":2,"prompt":"He is interested _____ science.","answer":"in","options":["in","on","at","to"],"explanation":"be interested in 表示對某事感興趣，是固定搭配。","memory":"interested 後面常接 in。"},
+    {"chapter":2,"prompt":"We should _____ our homework before dinner.","answer":"finish","options":["finish","finishes","finished","finishing"],"explanation":"情態助動詞 should 後面接原形動詞。","memory":"can / should / must 後面都接原形動詞。"},
+    {"chapter":2,"prompt":"If it rains, we _____ at home.","answer":"will stay","options":["stay","stayed","will stay","staying"],"explanation":"if 條件句談未來時，if 子句用現在式，主要子句常用 will + 原形。","memory":"If + 現在式，後面可接 will + V。"},
+    {"chapter":2,"prompt":"The movie was so _____ that I watched it twice.","answer":"interesting","options":["interest","interested","interesting","interestingly"],"explanation":"形容事物令人覺得有趣，用 interesting。","memory":"人感到 interested；事情令人 interesting。"},
+    {"chapter":2,"prompt":"I have lived here _____ 2020.","answer":"since","options":["for","since","during","from"],"explanation":"since 後面接起始時間點；2020 是時間點，所以選 since。","memory":"since + 起點；for + 一段時間。"},
     {"chapter":3,"prompt":"We decided _____ dinner near the hotel.","answer":"to order","options":["order","ordering","ordered","to order"],"explanation":"decide 後面常接 to + 原形，所以是 decided to order。","memory":"decide to do = 決定去做某事。"},
+    {"chapter":3,"prompt":"The report _____ by our team yesterday.","answer":"was completed","options":["completed","was completed","is completing","has complete"],"explanation":"報告是被完成，且時間是 yesterday，所以用過去被動 was completed。","memory":"被動語態：be + p.p.，過去單數用 was。"},
+    {"chapter":3,"prompt":"Although he was tired, he _____ studying.","answer":"kept","options":["kept","keeps","keeping","to keep"],"explanation":"Although 子句是過去式 was，主要子句也用過去式 kept。","memory":"although 表示雖然，前後句仍各自要有完整動詞。"},
+    {"chapter":3,"prompt":"This is the book _____ I bought yesterday.","answer":"that","options":["who","that","where","when"],"explanation":"先行詞 book 是物，關係代名詞可用 that。","memory":"人用 who；物可用 which 或 that。"},
+    {"chapter":3,"prompt":"You had better _____ a jacket.","answer":"bring","options":["bring","brings","brought","to bring"],"explanation":"had better 後面接原形動詞。","memory":"had better + 原形動詞，表示最好做某事。"},
+    {"chapter":3,"prompt":"Neither Tom nor his friends _____ ready.","answer":"are","options":["is","are","was","be"],"explanation":"neither...nor... 的動詞通常看靠近動詞的主詞；his friends 是複數，所以用 are。","memory":"neither A nor B，看靠近動詞的 B 決定單複數。"},
     {"chapter":4,"prompt":"The researcher tried _____ the data from multiple sources.","answer":"to synthesize","options":["synthesize","synthesizing","synthesized","to synthesize"],"explanation":"try to do 表示試著去做某事；正式學術句中可用 tried to synthesize。","memory":"try to do = 試著做；try doing = 試做看看效果。"},
     {"chapter":4,"prompt":"The article provides evidence _____ the hypothesis.","answer":"supporting","options":["support","supporting","supported","to support"],"explanation":"evidence supporting the hypothesis 是分詞片語，表示支持假設的證據。","memory":"名詞後面用 V-ing 可以補充說明它正在做的功能。"},
+    {"chapter":4,"prompt":"The findings are consistent _____ previous studies.","answer":"with","options":["with","to","for","by"],"explanation":"be consistent with 表示與某事一致，是學術英文常見搭配。","memory":"consistent 後面常接 with。"},
+    {"chapter":4,"prompt":"It is important _____ the limitations of the study.","answer":"to consider","options":["consider","considering","considered","to consider"],"explanation":"It is important to V 是常見句型，表示做某事很重要。","memory":"It is + 形容詞 + to V。"},
+    {"chapter":4,"prompt":"The data _____ collected from three schools.","answer":"were","options":["was","were","be","being"],"explanation":"data 在正式學術英文中常當複數，因此搭配 were。","memory":"正式寫作中 data 常視為複數。"},
+    {"chapter":4,"prompt":"The method was revised _____ improve reliability.","answer":"to","options":["to","for","by","with"],"explanation":"to improve reliability 表示目的：為了提升可靠性。","memory":"表示目的時常用 to + 原形動詞。"},
+    {"chapter":4,"prompt":"Having _____ the results, the researcher revised the claim.","answer":"analyzed","options":["analyze","analyzing","analyzed","to analyze"],"explanation":"Having + p.p. 表示先完成某動作後，再做下一個動作。","memory":"Having + p.p. = 已經做完某事之後。"},
 ]
 
 COMMON_WORD_BANK = [
