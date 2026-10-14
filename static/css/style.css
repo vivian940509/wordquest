@@ -383,6 +383,17 @@ main {
     font-weight: 800;
 }
 
+.kana-sound-button {
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid rgba(57, 214, 163, .35);
+    border-radius: 8px;
+    background: rgba(57, 214, 163, .1);
+    color: var(--accent);
+    font-weight: 800;
+    cursor: pointer;
+}
+
 .study-card {
     min-height: 240px;
     display: grid;

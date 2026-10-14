@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block title %}口說練習 | WordQuest{% endblock %}{% block content %}
+<section class="page-heading">
+  <p class="eyebrow">Speech</p>
+  <h1>口說練習設定</h1>
+  <p>先選你已經學到的章節和程度，再開始朗讀題，避免抽到還沒學過的單字。</p>
+</section>
+<form class="practice-form" method="post" action="{{ url_for('speech_practice') }}">
+  <div class="practice-options">
+    <label>章節
+      <select name="chapter">
+        {% for c in chapters %}<option value="{{ c.id }}">{{ c.icon }} 第 {{ c.id }} 章：{{ c.title }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>程度
+      <select name="difficulty">
+        <option value="beginner">初級</option>
+        <option value="intermediate" selected>中級</option>
+        <option value="advanced">高級</option>
+      </select>
+    </label>
+  </div>
+  <button class="primary-action" type="submit">開始口說練習</button>
+</form>
+{% endblock %}

@@ -212,3 +212,18 @@ if(kanaListening){
   draw();
 }
 
+document.querySelectorAll('[data-kana-speak]').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const kana=(btn.dataset.kanaSpeak||'').trim();
+    if(!kana||!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance)return;
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(kana);
+    const voices=window.speechSynthesis.getVoices();
+    const voice=voices.find(v=>/^ja/i.test(v.lang));
+    if(voice)u.voice=voice;
+    u.lang=voice?.lang||'ja-JP';
+    u.rate=.72;
+    window.speechSynthesis.speak(u);
+  });
+});
+

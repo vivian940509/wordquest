@@ -464,13 +464,24 @@ def test_speech_practice_starts_a_standalone_speech_question():
 def test_standalone_speech_and_cloze_routes_start_the_right_question_types():
     app.config["TESTING"] = True
     with app.test_client() as client:
-        speech = client.get("/speech-practice")
+        speech_setup = client.get("/speech-practice")
+        speech_setup_html = speech_setup.data.decode("utf-8")
+        assert speech_setup.status_code == 200
+        assert "口說練習設定" in speech_setup_html
+        assert "章節" in speech_setup_html
+        assert "程度" in speech_setup_html
+
+        speech = client.post("/speech-practice", data={"chapter": 2, "difficulty": "beginner"})
         assert speech.status_code == 302
         assert speech.headers["Location"].endswith("/practice/battle")
         speech_battle = client.get("/practice/battle")
         speech_html = speech_battle.data.decode("utf-8")
         assert "口說練習" in speech_html
         assert 'class="speech-button"' in speech_html
+        with client.session_transaction() as session:
+            run = session["practice_run"]
+            assert run["chapter_id"] == 2
+            assert run["difficulty"] == "beginner"
 
         cloze = client.get("/cloze-practice")
         assert cloze.status_code == 302
@@ -744,6 +755,8 @@ def test_japanese_nav_and_kana_page_show_complete_study_table():
         assert text in html
     assert 'data-kana-practice' in html
     assert 'data-kana-listening' in html
+    assert 'data-kana-speak="あ"' in html
+    assert "聽" in html
     assert "聽力練習" in html
     assert "日文聽力練習" in html
     assert 'data-kana-cloze' not in html

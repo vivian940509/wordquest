@@ -300,10 +300,19 @@ def level_summary():
 def practice():
     p=current_user(); return render_template("practice.html",profile=p,chapters=CHAPTERS,weak_count=len(fetch_mistake_words(p["id"],weak_only=True)))
 
-@app.get("/speech-practice")
+@app.route("/speech-practice", methods=["GET","POST"])
 def speech_practice():
-    session["practice_run"]={"mode":"speech","difficulty":"intermediate","chapter_id":1,"limit":10,"words":[],"results":[],"seed":int(time.time()*1000)}
-    return redirect(url_for("practice_battle"))
+    if request.method=="POST":
+        chapter=request.form.get("chapter",type=int) or 1
+        difficulty=request.form.get("difficulty","intermediate")
+        valid_chapters={int(chapter["id"]) for chapter in CHAPTERS}
+        if chapter not in valid_chapters:
+            chapter=1
+        if difficulty not in {"beginner","intermediate","advanced"}:
+            difficulty="intermediate"
+        session["practice_run"]={"mode":"speech","difficulty":difficulty,"chapter_id":chapter,"limit":10,"words":[],"results":[],"seed":int(time.time()*1000)}
+        return redirect(url_for("practice_battle"))
+    return render_template("speech_practice.html",profile=current_user(),chapters=CHAPTERS)
 
 @app.get("/cloze-practice")
 def cloze_practice():
