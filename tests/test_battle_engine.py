@@ -34,6 +34,8 @@ def test_speech_challenge_includes_cloze_hint_with_chinese_and_prefix():
     question = build_speech_challenge(seed=1)
     assert question["mode"] == "speech"
     assert question["answer_zh"]
+    assert question["answer"] == question["word"]
+    assert question["prompt"] == question["word"]
     assert question["speech_cloze"]
     assert question["speech_prefix"] == question["word"][:2]
     assert question["speech_prefix"] in question["speech_cloze"]

@@ -79,11 +79,11 @@ def build_speech_challenge(seed=None, chapter_id=1, stage_id=None, difficulty="i
     rng = random.Random(seed)
     card = rng.choice(_available_cards(chapter_id, stage_id, excluded_words))
     prefix = card["word"][:2]
-    cloze = card["example"].replace(card["word"], f"{prefix}{'_' * max(len(card['word']) - len(prefix), 1)}")
+    cloze = f"{prefix}{'_' * max(len(card['word']) - len(prefix), 1)}"
     return {
         "mode":"speech", "difficulty":difficulty, "difficulty_label":DIFFICULTY_LABELS.get(difficulty, difficulty),
-        "chapter_id":chapter_id, "stage_id":stage_id, "monster":"回音法師", "instruction":"跟著唸出這句英文",
-        "prompt":card["example"], "word":card["word"], "answer":card["example"], "answer_zh":card["zh"], "options":[], "show_hints":False,
+        "chapter_id":chapter_id, "stage_id":stage_id, "monster":"回音法師", "instruction":"跟著唸出這個單字",
+        "prompt":card["word"], "word":card["word"], "answer":card["word"], "answer_zh":card["zh"], "options":[], "show_hints":False,
         "option_details":{}, "example":card["example"], "memory_tip":"先慢慢唸清楚，再追求速度。",
         "speech_prefix":prefix, "speech_cloze":cloze,
         "explanation":"系統會依瀏覽器辨識結果估算相似度，並給你發音練習建議。",
