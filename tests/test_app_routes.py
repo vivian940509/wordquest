@@ -426,8 +426,25 @@ def test_custom_practice_page_lists_all_requested_modes():
         response = client.get("/practice")
     html=response.data.decode("utf-8")
     assert response.status_code == 200
-    for text in ["只練錯題","只練弱點","未馴服單字","指定章節","10 題快速練習","30 題挑戰","無限模式"]:
+    for text in ["只練錯題","只練弱點","未馴服單字","指定章節","10 題快速練習","口說練習","30 題挑戰","無限模式"]:
         assert text in html
+
+
+def test_speech_practice_starts_a_standalone_speech_question():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        response = client.post("/practice/start", data={"mode": "speech", "difficulty": "intermediate", "chapter": 1})
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/practice/battle")
+
+        battle = client.get("/practice/battle")
+        html = battle.data.decode("utf-8")
+
+    assert battle.status_code == 200
+    assert "口說練習" in html
+    assert "中文：" in html
+    assert "提示：" in html
+    assert 'class="speech-button"' in html
 
 
 def test_forgot_password_and_google_login_controls_exist():

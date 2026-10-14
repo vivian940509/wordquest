@@ -346,6 +346,24 @@ main {
     font-weight: 800;
     cursor: pointer;
 }
+.speech-cloze {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+    border: 1px solid rgba(117,230,199,.26);
+    border-radius: 14px;
+    background: rgba(117,230,199,.08);
+}
+
+.speech-cloze span {
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.speech-cloze strong {
+    font-size: 1.15rem;
+}
 
 .word-card {
     display: grid;

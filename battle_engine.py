@@ -78,11 +78,14 @@ def build_cloze_question(seed=None, chapter_id=2, stage_id=None):
 def build_speech_challenge(seed=None, chapter_id=1, stage_id=None, difficulty="intermediate", excluded_words=None):
     rng = random.Random(seed)
     card = rng.choice(_available_cards(chapter_id, stage_id, excluded_words))
+    prefix = card["word"][:2]
+    cloze = card["example"].replace(card["word"], f"{prefix}{'_' * max(len(card['word']) - len(prefix), 1)}")
     return {
         "mode":"speech", "difficulty":difficulty, "difficulty_label":DIFFICULTY_LABELS.get(difficulty, difficulty),
         "chapter_id":chapter_id, "stage_id":stage_id, "monster":"回音法師", "instruction":"跟著唸出這句英文",
         "prompt":card["example"], "word":card["word"], "answer":card["example"], "answer_zh":card["zh"], "options":[], "show_hints":False,
         "option_details":{}, "example":card["example"], "memory_tip":"先慢慢唸清楚，再追求速度。",
+        "speech_prefix":prefix, "speech_cloze":cloze,
         "explanation":"系統會依瀏覽器辨識結果估算相似度，並給你發音練習建議。",
     }
 
@@ -91,9 +94,6 @@ def build_battle(seed=None, mistake_streak=0, difficulty="beginner", chapter_id=
     rng = random.Random(seed)
     if difficulty == "advanced" and not stage_id:
         return build_cloze_question(seed=seed, chapter_id=chapter_id, stage_id=stage_id)
-    mode = rng.choice(["shield", "shield", "speech"] if difficulty == "intermediate" else ["shield"])
-    if mode == "speech":
-        return build_speech_challenge(seed=seed, chapter_id=chapter_id, stage_id=stage_id, difficulty=difficulty, excluded_words=excluded_words)
     return build_vocab_question(seed=seed, weak_mode=mistake_streak >= 2, difficulty=difficulty, chapter_id=chapter_id, stage_id=stage_id, excluded_words=excluded_words)
 
 

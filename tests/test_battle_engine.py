@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from battle_engine import build_battle, build_vocab_question, grade_answer, next_review_time
+from battle_engine import build_battle, build_speech_challenge, build_vocab_question, grade_answer, next_review_time
 from word_data import STARTER_WORDS
 
 
@@ -23,6 +23,20 @@ def test_stage_question_excludes_words_already_seen_in_level():
         for seed in range(20)
     }
     assert answers == {"teacher"}
+
+
+def test_intermediate_battle_keeps_speech_out_of_regular_rounds():
+    modes = {build_battle(seed=seed, difficulty="intermediate")["mode"] for seed in range(30)}
+    assert modes == {"shield"}
+
+
+def test_speech_challenge_includes_cloze_hint_with_chinese_and_prefix():
+    question = build_speech_challenge(seed=1)
+    assert question["mode"] == "speech"
+    assert question["answer_zh"]
+    assert question["speech_cloze"]
+    assert question["speech_prefix"] == question["word"][:2]
+    assert question["speech_prefix"] in question["speech_cloze"]
 
 
 def test_grade_answer_rewards_correct_choice():

@@ -3,7 +3,7 @@ from datetime import timedelta
 from urllib.parse import quote
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for, flash
-from battle_engine import build_battle, build_review_question, grade_answer, build_wrong_answer_analysis
+from battle_engine import build_battle, build_review_question, build_speech_challenge, grade_answer, build_wrong_answer_analysis
 from database import (apply_battle_result, record_stage_completion, fetch_learning_analytics, fetch_mistake_words, fetch_unmastered_words, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress, fetch_map_snapshot,
                       fetch_daily, fetch_items, buy_item, has_item, create_challenge, fetch_challenge, touch_login, record_challenge_result, challenge_leaderboard,
                       claim_daily_mission, fetch_due_vocabulary, equip_item, unequip_item, fetch_recent_mistakes, clear_challenge_results, fetch_achievements, achievement_metrics)
@@ -74,7 +74,7 @@ def run_summary(results,total=5):
 
 def question_time_limit(question):
     # Keep rounds fast and game-like. Speech gets a little extra time for mic startup.
-    if question.get("mode")=="speech": return 8
+    if question.get("mode")=="speech": return 15
     return 8
 
 def current_user():
@@ -298,7 +298,7 @@ def practice():
 @app.post("/practice/start")
 def practice_start():
     p=current_user(); mode=request.form.get("mode","quick10"); difficulty=request.form.get("difficulty","intermediate"); chapter=request.form.get("chapter",type=int) or 1
-    limit={"quick10":10,"challenge30":30}.get(mode)
+    limit={"quick10":10,"speech":10,"challenge30":30}.get(mode)
     words=[]
     if mode in {"wrong","weak"}: words=[x["word"] for x in fetch_mistake_words(p["id"],sort="count",weak_only=(mode=="weak"))]
     elif mode=="unmastered":
@@ -315,7 +315,10 @@ def practice_battle():
     run=session.get("practice_run")
     if not run: return redirect(url_for("practice"))
     idx=len(run.get("results",[])); words=run.get("words") or []
-    if words:
+    if run.get("mode")=="speech":
+        q=build_speech_challenge(seed=int(run.get("seed",0))+idx*9973,chapter_id=run.get("chapter_id",1),difficulty=run.get("difficulty","intermediate"))
+        q["difficulty_label"]="口說練習"
+    elif words:
         word=words[idx%len(words)]; q=build_review_question(word,seed=int(run.get("seed",0))+idx); q["difficulty"]=run.get("difficulty","intermediate"); q["difficulty_label"]={"beginner":"初級","intermediate":"中級","advanced":"高級"}.get(q["difficulty"],"練習")
     else:
         q=build_battle(seed=int(run.get("seed",0))+idx*9973,mistake_streak=int(session.get("mistake_streak",0)),difficulty=run.get("difficulty","intermediate"),chapter_id=run.get("chapter_id",1),stage_id=None)
