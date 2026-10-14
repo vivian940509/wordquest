@@ -219,6 +219,170 @@ main {
     gap: 16px;
 }
 
+.japanese-heading {
+    max-width: 820px;
+}
+
+.kana-practice {
+    display: grid;
+    grid-template-columns: minmax(240px, .75fr) minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+    margin: 0 0 26px;
+    padding: 20px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(27, 33, 48, .9);
+}
+
+.kana-practice h2 {
+    margin: 8px 0 16px;
+}
+
+.kana-practice strong {
+    display: block;
+    font-size: clamp(4rem, 12vw, 8rem);
+    line-height: 1;
+}
+
+.kana-practice span {
+    color: var(--muted);
+    font-weight: 800;
+}
+
+.kana-practice form,
+.kana-practice label {
+    display: grid;
+    gap: 10px;
+}
+
+.kana-practice input[type="text"],
+.kana-practice input[name="romaji"] {
+    width: 100%;
+    min-height: 46px;
+    padding: 0 14px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(255,255,255,.06);
+    color: var(--text);
+    font: inherit;
+}
+
+.kana-mode-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.kana-mode-tabs label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0 10px;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 8px;
+    background: rgba(255,255,255,.04);
+    cursor: pointer;
+}
+
+.kana-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.kana-feedback {
+    min-height: 28px;
+    margin: 0;
+    font-weight: 800;
+}
+
+.kana-feedback.correct {
+    color: var(--accent);
+}
+
+.kana-feedback.wrong {
+    color: var(--gold);
+}
+
+.kana-study-shell {
+    display: grid;
+    gap: 18px;
+}
+
+.kana-skill-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin: 0 0 26px;
+}
+
+.kana-mini-tool {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(27, 33, 48, .86);
+}
+
+.kana-mini-tool h2 {
+    margin: 8px 0;
+}
+
+.kana-mini-tool p {
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.kana-mini-tool > strong,
+.kana-mini-tool form > strong {
+    display: block;
+    font-size: clamp(2.4rem, 7vw, 4.6rem);
+    line-height: 1;
+}
+
+.kana-mini-tool form {
+    display: grid;
+    gap: 12px;
+}
+
+.kana-section {
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: rgba(27, 33, 48, .82);
+}
+
+.kana-table-wrap {
+    overflow-x: auto;
+}
+
+.kana-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.kana-table th,
+.kana-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,.08);
+    text-align: left;
+}
+
+.kana-table th {
+    color: var(--muted);
+    font-size: .86rem;
+}
+
+.kana-table td:first-child,
+.kana-table td:nth-child(2) {
+    font-size: 1.5rem;
+    font-weight: 800;
+}
+
 .study-card {
     min-height: 240px;
     display: grid;

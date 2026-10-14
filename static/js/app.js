@@ -147,3 +147,68 @@ document.querySelectorAll('[data-expand-copy]').forEach(btn=>btn.addEventListene
 const navToggle=document.querySelector('[data-nav-toggle]');
 const nav=document.querySelector('[data-nav]');
 if(navToggle&&nav){navToggle.addEventListener('click',()=>nav.classList.toggle('open'))}
+
+const kanaPractice=document.querySelector('[data-kana-practice]');
+if(kanaPractice){
+  const cards=JSON.parse(kanaPractice.dataset.kanaCards||'[]');
+  const prompt=kanaPractice.querySelector('[data-kana-prompt]');
+  const script=kanaPractice.querySelector('[data-kana-script]');
+  const form=kanaPractice.querySelector('[data-kana-form]');
+  const input=form?.querySelector('input[name="romaji"]');
+  const feedback=kanaPractice.querySelector('[data-kana-feedback]');
+  const next=kanaPractice.querySelector('[data-kana-next]');
+  let active=null;
+  const mode=()=>form?.querySelector('input[name="kana-mode"]:checked')?.value||'hiragana';
+  const draw=()=>{
+    if(!cards.length)return;
+    active=cards[Math.floor(Math.random()*cards.length)];
+    const currentMode=mode();
+    const useKatakana=currentMode==='katakana'||(currentMode==='mixed'&&Math.random()>.5);
+    prompt.textContent=useKatakana?active.katakana:active.hiragana;
+    script.textContent=useKatakana?'片假名':'平假名';
+    input.value='';
+    feedback.textContent='';
+    input.focus();
+  };
+  form?.addEventListener('submit',event=>{
+    event.preventDefault();
+    if(!active)return;
+    const answer=(input.value||'').trim().toLowerCase();
+    const correct=answer===active.romaji;
+    feedback.textContent=correct?`答對：${active.hiragana} / ${active.katakana} = ${active.romaji}`:`再試一次：正確是 ${active.romaji}`;
+    feedback.classList.toggle('correct',correct);
+    feedback.classList.toggle('wrong',!correct);
+  });
+  form?.querySelectorAll('input[name="kana-mode"]').forEach(radio=>radio.addEventListener('change',draw));
+  next?.addEventListener('click',draw);
+  draw();
+}
+
+const kanaListening=document.querySelector('[data-kana-listening]');
+if(kanaListening){
+  const cards=JSON.parse(document.querySelector('[data-kana-practice]')?.dataset.kanaCards||'[]');
+  const symbol=kanaListening.querySelector('[data-kana-listen-symbol]');
+  const answer=kanaListening.querySelector('[data-kana-listen-answer]');
+  let active=null;
+  const draw=()=>{
+    if(!cards.length)return;
+    active=cards[Math.floor(Math.random()*cards.length)];
+    symbol.textContent=active.hiragana;
+    answer.textContent=`${active.hiragana} / ${active.katakana} = ${active.romaji}`;
+  };
+  const speak=()=>{
+    if(!active||!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance)return;
+    window.speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(active.hiragana);
+    const voices=window.speechSynthesis.getVoices();
+    const voice=voices.find(v=>/^ja/i.test(v.lang));
+    if(voice)u.voice=voice;
+    u.lang=voice?.lang||'ja-JP';
+    u.rate=.72;
+    window.speechSynthesis.speak(u);
+  };
+  kanaListening.querySelector('[data-kana-play]')?.addEventListener('click',speak);
+  kanaListening.querySelector('[data-kana-listen-next]')?.addEventListener('click',draw);
+  draw();
+}
+

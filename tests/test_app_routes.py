@@ -440,7 +440,7 @@ def test_custom_practice_page_lists_all_requested_modes():
         response = client.get("/practice")
     html=response.data.decode("utf-8")
     assert response.status_code == 200
-    for text in ["只練錯題","只練弱點","未馴服單字","指定章節","10 題快速練習","口說練習","30 題挑戰","無限模式"]:
+    for text in ["只練錯題","只練弱點","未馴服單字","指定章節","10 題快速練習","口說練習","克漏字練習","30 題挑戰","無限模式"]:
         assert text in html
 
 
@@ -459,6 +459,26 @@ def test_speech_practice_starts_a_standalone_speech_question():
     assert "中文：" in html
     assert "提示：" in html
     assert 'class="speech-button"' in html
+
+
+def test_standalone_speech_and_cloze_routes_start_the_right_question_types():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        speech = client.get("/speech-practice")
+        assert speech.status_code == 302
+        assert speech.headers["Location"].endswith("/practice/battle")
+        speech_battle = client.get("/practice/battle")
+        speech_html = speech_battle.data.decode("utf-8")
+        assert "口說練習" in speech_html
+        assert 'class="speech-button"' in speech_html
+
+        cloze = client.get("/cloze-practice")
+        assert cloze.status_code == 302
+        assert cloze.headers["Location"].endswith("/practice/battle")
+        cloze_battle = client.get("/practice/battle")
+        cloze_html = cloze_battle.data.decode("utf-8")
+        assert "克漏字練習" in cloze_html
+        assert "選出正確的填空答案" in cloze_html
 
 
 def test_forgot_password_and_google_login_controls_exist():
@@ -701,3 +721,29 @@ def test_frontend_answer_submit_shows_immediate_feedback():
     assert "hiddenSelected.name='selected'" in js
     assert "hiddenSelected.value=chosen?.value||''" in js
     assert "touch-action: manipulation" in css
+
+
+def test_japanese_nav_and_kana_page_show_complete_study_table():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        home = client.get("/")
+        response = client.get("/japanese")
+
+    html = response.data.decode("utf-8")
+    assert home.status_code == 200
+    assert "日文" in home.data.decode("utf-8")
+    assert response.status_code == 200
+    assert "50 音" in html
+    assert "平假名" in html
+    assert "片假名" in html
+    assert "清音" in html
+    assert "濁音" in html
+    assert "半濁音" in html
+    assert "拗音" in html
+    for text in ["あ", "ア", "ん", "ン", "が", "ガ", "ぱ", "パ", "きゃ", "キャ"]:
+        assert text in html
+    assert 'data-kana-practice' in html
+    assert 'data-kana-listening' in html
+    assert "聽力練習" in html
+    assert "日文聽力練習" in html
+    assert 'data-kana-cloze' not in html

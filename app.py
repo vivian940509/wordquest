@@ -3,11 +3,12 @@ from datetime import timedelta
 from urllib.parse import quote
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for, flash
-from battle_engine import build_battle, build_review_question, build_speech_challenge, grade_answer, build_wrong_answer_analysis
+from battle_engine import build_battle, build_cloze_question, build_review_question, build_speech_challenge, grade_answer, build_wrong_answer_analysis
 from database import (apply_battle_result, record_stage_completion, fetch_learning_analytics, fetch_mistake_words, fetch_unmastered_words, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress, fetch_map_snapshot,
                       fetch_daily, fetch_items, buy_item, has_item, create_challenge, fetch_challenge, touch_login, record_challenge_result, challenge_leaderboard,
                       claim_daily_mission, fetch_due_vocabulary, equip_item, unequip_item, fetch_recent_mistakes, clear_challenge_results, fetch_achievements, achievement_metrics)
 from dictionary_api import lookup_word
+from japanese_data import KANA_TABLES, flattened_kana
 from word_data import STARTER_WORDS, WORD_HINTS, CHAPTERS, DAILY_MISSIONS, SHOP_ITEMS, ACHIEVEMENTS, stage_words
 from ai_teacher import explain as teacher_explain
 load_dotenv()
@@ -194,6 +195,10 @@ def index():
 @app.get("/study")
 def study(): return render_template("study.html",profile=current_user(),words=STARTER_WORDS)
 
+@app.get("/japanese")
+def japanese():
+    return render_template("japanese.html",profile=current_user(),kana_tables=KANA_TABLES,kana_cards=flattened_kana())
+
 @app.get("/map")
 def map_page():
     p=current_user(); snapshot=fetch_map_snapshot(p["id"]); progress=snapshot["progress"]; earned=snapshot["earned"]
@@ -295,10 +300,20 @@ def level_summary():
 def practice():
     p=current_user(); return render_template("practice.html",profile=p,chapters=CHAPTERS,weak_count=len(fetch_mistake_words(p["id"],weak_only=True)))
 
+@app.get("/speech-practice")
+def speech_practice():
+    session["practice_run"]={"mode":"speech","difficulty":"intermediate","chapter_id":1,"limit":10,"words":[],"results":[],"seed":int(time.time()*1000)}
+    return redirect(url_for("practice_battle"))
+
+@app.get("/cloze-practice")
+def cloze_practice():
+    session["practice_run"]={"mode":"cloze","difficulty":"advanced","chapter_id":2,"limit":10,"words":[],"results":[],"seed":int(time.time()*1000)}
+    return redirect(url_for("practice_battle"))
+
 @app.post("/practice/start")
 def practice_start():
     p=current_user(); mode=request.form.get("mode","quick10"); difficulty=request.form.get("difficulty","intermediate"); chapter=request.form.get("chapter",type=int) or 1
-    limit={"quick10":10,"speech":10,"challenge30":30}.get(mode)
+    limit={"quick10":10,"speech":10,"cloze":10,"challenge30":30}.get(mode)
     words=[]
     if mode in {"wrong","weak"}: words=[x["word"] for x in fetch_mistake_words(p["id"],sort="count",weak_only=(mode=="weak"))]
     elif mode=="unmastered":
@@ -318,6 +333,9 @@ def practice_battle():
     if run.get("mode")=="speech":
         q=build_speech_challenge(seed=int(run.get("seed",0))+idx*9973,chapter_id=run.get("chapter_id",1),difficulty=run.get("difficulty","intermediate"))
         q["difficulty_label"]="口說練習"
+    elif run.get("mode")=="cloze":
+        q=build_cloze_question(seed=int(run.get("seed",0))+idx*9973,chapter_id=run.get("chapter_id",2))
+        q["difficulty_label"]="克漏字練習"
     elif words:
         word=words[idx%len(words)]; q=build_review_question(word,seed=int(run.get("seed",0))+idx); q["difficulty"]=run.get("difficulty","intermediate"); q["difficulty_label"]={"beginner":"初級","intermediate":"中級","advanced":"高級"}.get(q["difficulty"],"練習")
     else:
