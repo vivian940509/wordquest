@@ -48,6 +48,11 @@ def _initialize_database(engine):
             if "last_wrong_at" not in vcols: c.execute(text("ALTER TABLE user_vocabulary ADD COLUMN last_wrong_at TEXT"))
             c.execute(text("UPDATE user_vocabulary SET weak_word=CASE WHEN mistake_count>=3 THEN 1 ELSE 0 END"))
         elif engine.dialect.name.startswith("postgresql"):
+            c.execute(text("""CREATE TABLE IF NOT EXISTS public.user_favorites (
+                user_id UUID NOT NULL REFERENCES public.users_profile(id) ON DELETE CASCADE,
+                word TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY(user_id, word))"""))
+            c.execute(text("ALTER TABLE public.user_favorites ENABLE ROW LEVEL SECURITY"))
             c.execute(text("ALTER TABLE IF EXISTS public.user_vocabulary ADD COLUMN IF NOT EXISTS weak_word boolean NOT NULL DEFAULT false"))
             c.execute(text("ALTER TABLE IF EXISTS public.user_vocabulary ADD COLUMN IF NOT EXISTS last_wrong_at timestamptz"))
             c.execute(text("UPDATE public.user_vocabulary SET weak_word = (mistake_count >= 3) WHERE weak_word IS DISTINCT FROM (mistake_count >= 3)"))
@@ -130,6 +135,10 @@ def _merge_profile_data(c, source_user_id, target_user_id):
             ELSE excluded.last_wrong_at END,
         last_seen_at=CURRENT_TIMESTAMP"""),{"source":source_user_id,"target":target_user_id})
 
+    c.execute(text("""INSERT INTO user_favorites(user_id,word,created_at)
+        SELECT :target,word,created_at FROM user_favorites WHERE user_id=:source
+        ON CONFLICT(user_id,word) DO NOTHING"""),{"source":source_user_id,"target":target_user_id})
+
     for row in c.execute(text("SELECT * FROM daily_progress WHERE user_id=:source"),{"source":source_user_id}).mappings().all():
         existing=c.execute(text("SELECT * FROM daily_progress WHERE user_id=:target AND progress_date=:day"),{"target":target_user_id,"day":row["progress_date"]}).mappings().first()
         if existing:
@@ -157,7 +166,7 @@ def _merge_profile_data(c, source_user_id, target_user_id):
     for table in ("answer_history","challenges","challenge_results"):
         column="creator_user_id" if table=="challenges" else "user_id"
         c.execute(text(f"UPDATE {table} SET {column}=:target WHERE {column}=:source"),{"source":source_user_id,"target":target_user_id})
-    for table in ("stage_progress","user_vocabulary","daily_progress","user_items","user_achievements"):
+    for table in ("stage_progress","user_vocabulary","daily_progress","user_items","user_achievements","user_favorites"):
         c.execute(text(f"DELETE FROM {table} WHERE user_id=:source"),{"source":source_user_id})
     c.execute(text("DELETE FROM users_profile WHERE id=:source"),{"source":source_user_id})
 
@@ -238,6 +247,19 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
 
     # Achievement checks are idempotent; rewards are granted only on first unlock.
     return refresh_achievements(user_id) if check_achievements else []
+
+
+def fetch_favorites(user_id):
+    with db_connection() as c:
+        return list(c.execute(text("SELECT word FROM user_favorites WHERE user_id=:u ORDER BY created_at DESC,word"), {"u":user_id}).scalars())
+
+
+def set_favorite(user_id, word, favorite):
+    with db_connection() as c:
+        if favorite:
+            c.execute(text("INSERT INTO user_favorites(user_id,word) VALUES(:u,:w) ON CONFLICT(user_id,word) DO NOTHING"), {"u":user_id,"w":word})
+        else:
+            c.execute(text("DELETE FROM user_favorites WHERE user_id=:u AND word=:w"), {"u":user_id,"w":word})
 
 
 def fetch_vocabulary(user_id):

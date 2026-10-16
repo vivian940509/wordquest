@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}收藏單字 | WordQuest{% endblock %}
+{% block content %}
+<section class="study-hero"><div><p class="eyebrow">Favorites</p><h1>收藏單字</h1><p>共 {{ words|length }} 個單字，把想再複習的單字留在這裡。</p></div><a class="primary-action" href="{{ url_for('study') }}">探索單字</a></section>
+<section class="study-grid">{% for item in words %}
+<article class="study-card"><div><p class="eyebrow">{{ item.pos }}</p><h2>{{ item.word }}</h2><strong>{{ item.zh }}</strong></div><p>{{ item.context }}</p><small>{{ item.memory }}</small><div class="study-card-footer"><small>{{ item.example }}</small><button class="sound-button" type="button" data-speak-word="{{ item.word }}">聽發音</button></div>{% include '_favorite_button.html' %}</article>
+{% else %}<p class="empty-state">還沒有收藏，點選單字旁的「☆ 收藏」，就能在這裡複習。</p>{% endfor %}</section>
+{% endblock %}

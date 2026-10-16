@@ -7,6 +7,7 @@ from battle_engine import build_battle, build_cloze_question, build_review_quest
 from database import (apply_battle_result, record_stage_completion, fetch_learning_analytics, fetch_mistake_words, fetch_unmastered_words, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress, fetch_map_snapshot,
                       fetch_daily, fetch_items, buy_item, has_item, create_challenge, fetch_challenge, touch_login, record_challenge_result, challenge_leaderboard,
                       claim_daily_mission, fetch_due_vocabulary, equip_item, unequip_item, fetch_recent_mistakes, clear_challenge_results, fetch_achievements, achievement_metrics)
+from database import fetch_favorites, set_favorite
 from dictionary_api import lookup_word
 from japanese_data import KANA_TABLES, flattened_kana
 from word_data import STARTER_WORDS, WORD_HINTS, CHAPTERS, DAILY_MISSIONS, SHOP_ITEMS, ACHIEVEMENTS, stage_words
@@ -193,7 +194,9 @@ def index():
         except Exception: claimed=[]
     return render_template("index.html",profile=p,daily=daily,missions=DAILY_MISSIONS,claimed=set(claimed),due_count=len(fetch_due_vocabulary(p["id"])))
 @app.get("/study")
-def study(): return render_template("study.html",profile=current_user(),words=STARTER_WORDS)
+def study():
+    p=current_user()
+    return render_template("study.html",profile=p,words=STARTER_WORDS,favorite_words=set(fetch_favorites(p["id"])))
 
 @app.get("/japanese")
 def japanese():
@@ -502,7 +505,28 @@ def mistakes():
     return render_template("mistakes.html",profile=p,items=fetch_recent_mistakes(p["id"]),words=fetch_mistake_words(p["id"],sort=sort,weak_only=weak),due=fetch_due_vocabulary(p["id"]),sort=sort,weak=weak)
 
 @app.get("/vocabulary")
-def vocabulary(): return render_template("vocabulary.html",profile=current_user(),words=fetch_vocabulary(current_user()["id"]))
+def vocabulary():
+    p=current_user()
+    return render_template("vocabulary.html",profile=p,words=fetch_vocabulary(p["id"]),favorite_words=set(fetch_favorites(p["id"])))
+
+
+@app.route("/favorites", methods=["GET", "POST"])
+def favorites():
+    p=current_user()
+    if request.method=="POST":
+        word=request.form.get("word", "").strip().lower()
+        action=request.form.get("action", "")
+        known={x["word"] for x in STARTER_WORDS} | set(WORD_HINTS) | {x["word"] for x in fetch_vocabulary(p["id"])} | set(fetch_favorites(p["id"]))
+        if word not in known or action not in {"add", "remove"}:
+            return "無效的收藏操作", 400
+        set_favorite(p["id"], word, action=="add")
+        destination=request.form.get("next", "")
+        if destination not in {url_for("study"), url_for("vocabulary"), url_for("favorites")}:
+            destination=url_for("favorites")
+        return redirect(destination, code=303)
+    catalog={x["word"]:x for x in STARTER_WORDS}
+    words=[catalog.get(w, {"word":w,"zh":WORD_HINTS.get(w,""),"pos":"","context":"","memory":"","example":""}) for w in fetch_favorites(p["id"])]
+    return render_template("favorites.html",profile=p,words=words,favorite_words={x["word"] for x in words})
 @app.get("/shop")
 def shop():
     p=current_user(); rows=fetch_items(p["id"]); return render_template("shop.html",profile=p,items=SHOP_ITEMS,owned={x["item_key"] for x in rows},equipped=p.get("equipped_gear","") or "")

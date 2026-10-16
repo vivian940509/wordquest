@@ -9,6 +9,11 @@ create table if not exists public.users_profile (
   streak_freezes int not null default 0, last_login date not null default current_date,
   unlocked_chapter int not null default 1, equipped_gear text not null default '', created_at timestamptz not null default now()
 );
+create table if not exists public.user_favorites (
+  user_id uuid not null references public.users_profile(id) on delete cascade,
+  word text not null, created_at timestamptz not null default now(), primary key(user_id, word)
+);
+alter table public.user_favorites enable row level security;
 create table if not exists public.user_vocabulary (
   id bigserial primary key, user_id uuid not null references public.users_profile(id) on delete cascade,
   word text not null, proficiency_level int not null default 0 check (proficiency_level between 0 and 5),
@@ -62,6 +67,10 @@ alter table public.challenges enable row level security;
 alter table public.challenge_results enable row level security;
 
 -- These policies apply when you later switch from server-side DB access to Supabase Auth/JWT.
+do $$ begin
+  create policy "favorites owner" on public.user_favorites for all using (user_id in (select id from public.users_profile where auth_user_id = auth.uid())) with check (user_id in (select id from public.users_profile where auth_user_id = auth.uid()));
+exception when duplicate_object then null; end $$;
+
 do $$ begin
   create policy "profile owner" on public.users_profile for all using (auth.uid() = auth_user_id) with check (auth.uid() = auth_user_id);
 exception when duplicate_object then null; end $$;

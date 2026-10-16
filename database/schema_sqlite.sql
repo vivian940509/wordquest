@@ -4,6 +4,11 @@ CREATE TABLE IF NOT EXISTS users_profile (
     streak_freezes INTEGER DEFAULT 0, last_login TEXT DEFAULT CURRENT_DATE, unlocked_chapter INTEGER DEFAULT 1,
     equipped_gear TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS user_favorites (
+    user_id TEXT NOT NULL REFERENCES users_profile(id) ON DELETE CASCADE,
+    word TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(user_id, word)
+);
 CREATE TABLE IF NOT EXISTS user_vocabulary (
     id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, word TEXT NOT NULL,
     proficiency_level INTEGER DEFAULT 0, next_review_time TEXT DEFAULT CURRENT_TIMESTAMP,

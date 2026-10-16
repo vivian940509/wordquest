@@ -598,6 +598,38 @@ main {
     font-weight: 900;
 }
 
+/* Keep the prompt and all four choices visible on small screens without
+   treating a finger that was scrolling as an answer tap. */
+@media (max-width: 600px) {
+    .monster-stage {
+        min-height: 128px;
+        gap: 8px;
+        padding: 12px;
+    }
+    .monster-orb {
+        width: 64px;
+        height: 64px;
+        border-radius: 18px;
+        font-size: 1.25rem;
+    }
+    .monster-stage p {
+        margin: 0;
+        font-size: .92rem;
+        line-height: 1.35;
+    }
+    .card-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+    }
+    .word-card {
+        min-height: 72px;
+        padding: 10px 8px;
+    }
+    .word-card strong {
+        font-size: 1rem;
+    }
+}
+
 .summary-wrong-details summary {
     display: flex;
     justify-content: space-between;
@@ -752,3 +784,5 @@ main {
 @media(max-width:560px){.streak-strip{gap:5px}.streak-day{padding:10px 3px}.streak-day small{font-size:.7rem}}
 
 .polished-google-action{display:flex;align-items:center;justify-content:flex-start;gap:12px;width:100%;min-height:64px;padding:12px 14px;border:1px solid rgba(255,255,255,.8);box-shadow:0 14px 34px rgba(0,0,0,.24);text-align:left;transition:transform .18s ease,box-shadow .18s ease}.polished-google-action:hover{transform:translateY(-2px);box-shadow:0 18px 42px rgba(0,0,0,.3)}.polished-google-action span:last-child{display:grid;gap:2px}.polished-google-action small{color:#5f6673;font-weight:700}.google-mark{width:38px;height:38px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:linear-gradient(135deg,#4285f4,#34a853 45%,#fbbc05 70%,#ea4335);color:white;font-weight:900}
+
+.favorite-form{margin-top:12px}.favorite-button{cursor:pointer;border:1px solid #8995b0;border-radius:12px;padding:8px 14px;background:transparent;color:inherit;font:inherit}.favorite-button.is-favorite{color:#f8ca64;border-color:#f8ca64}.favorite-button:hover{background:rgba(248,202,100,.12)}.favorite-button:focus-visible{outline:3px solid #f8ca64;outline-offset:3px}

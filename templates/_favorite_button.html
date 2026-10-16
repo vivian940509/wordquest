@@ -1,0 +1,6 @@
+<form class="favorite-form" method="post" action="{{ url_for('favorites') }}">
+  <input type="hidden" name="word" value="{{ item.word }}">
+  <input type="hidden" name="next" value="{{ request.path }}">
+  <input type="hidden" name="action" value="{{ 'remove' if item.word in favorite_words else 'add' }}">
+  <button class="favorite-button {{ 'is-favorite' if item.word in favorite_words else '' }}" type="submit" aria-label="{{ '取消收藏' if item.word in favorite_words else '收藏' }} {{ item.word }}" aria-pressed="{{ 'true' if item.word in favorite_words else 'false' }}">{{ '★ 已收藏' if item.word in favorite_words else '☆ 收藏' }}</button>
+</form>
