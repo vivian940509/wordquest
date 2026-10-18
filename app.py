@@ -11,7 +11,7 @@ from database import fetch_favorites, set_favorite
 from dictionary_api import lookup_word
 from japanese_data import KANA_TABLES, flattened_kana
 from word_data import STARTER_WORDS, WORD_HINTS, CHAPTERS, DAILY_MISSIONS, SHOP_ITEMS, ACHIEVEMENTS, stage_words
-from ai_teacher import explain as teacher_explain
+from ai_teacher import explain as teacher_explain, explain_lyrics
 load_dotenv()
 app=Flask(__name__); app.config["SECRET_KEY"]=os.getenv("SECRET_KEY","dev-wordquest"); app.permanent_session_lifetime=timedelta(days=30)
 app.config.setdefault("PRONUNCIATION_CACHE", {})
@@ -201,6 +201,16 @@ def study():
 @app.get("/japanese")
 def japanese():
     return render_template("japanese.html",profile=current_user(),kana_tables=KANA_TABLES,kana_cards=flattened_kana())
+
+@app.post("/api/japanese/lyrics")
+def api_japanese_lyrics():
+    lyrics=request.form.get("lyrics", "").strip()
+    if not lyrics:
+        return jsonify({"error":"請先貼上日文歌詞。"}), 400
+    if len(lyrics)>5000:
+        return jsonify({"error":"歌詞請控制在 5000 字以內。"}), 413
+    notes,source=explain_lyrics(lyrics)
+    return jsonify({"lines":notes,"source":source})
 
 @app.get("/map")
 def map_page():

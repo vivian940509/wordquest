@@ -43,6 +43,16 @@
   </article>
 </section>
 
+<section class="lyrics-study" data-lyrics-study>
+  <div class="section-title"><div><p class="eyebrow">Lyrics Study</p><h2>貼上歌詞，逐行學習</h2></div><span>每次最多 5000 字</span></div>
+  <form data-lyrics-form>
+    <textarea name="lyrics" rows="8" maxlength="5000" placeholder="把日文歌詞貼在這裡…" required></textarea>
+    <div class="lyrics-actions"><small data-lyrics-status>會顯示逐行翻譯、單字與文法提示</small><button class="primary-action" type="submit">翻譯與解析</button></div>
+  </form>
+  <p class="lyrics-error" data-lyrics-error hidden></p>
+  <div class="lyrics-results" data-lyrics-results></div>
+</section>
+
 <section class="kana-study-shell">
   {% for table in kana_tables %}
     <article class="kana-section">

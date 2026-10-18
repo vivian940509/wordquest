@@ -185,6 +185,32 @@ if(kanaPractice){
 }
 
 const kanaListening=document.querySelector('[data-kana-listening]');
+const lyricsStudy=document.querySelector('[data-lyrics-study]');
+if(lyricsStudy){
+  const form=lyricsStudy.querySelector('[data-lyrics-form]');
+  const status=lyricsStudy.querySelector('[data-lyrics-status]');
+  const error=lyricsStudy.querySelector('[data-lyrics-error]');
+  const results=lyricsStudy.querySelector('[data-lyrics-results]');
+  form?.addEventListener('submit',async event=>{
+    event.preventDefault(); error.hidden=true; results.replaceChildren();
+    const button=form.querySelector('button'); button.disabled=true; status.textContent='翻譯與整理中…';
+    try{
+      const response=await fetch('/api/japanese/lyrics',{method:'POST',body:new FormData(form),headers:{Accept:'application/json'}});
+      const data=await response.json(); if(!response.ok) throw new Error(data.error||'翻譯失敗，請稍後再試。');
+      data.lines.forEach(line=>{
+        const article=document.createElement('article'); article.className='lyrics-line';
+        const vocab=(line.vocabulary||[]).map(item=>typeof item==='string'?item:`${item.word||''} ${item.reading?'（'+item.reading+'）':''}：${item.meaning||''}`).join('、');
+        article.innerHTML=`<p class="lyrics-japanese"></p><strong class="lyrics-translation"></strong>${vocab?'<small class="lyrics-vocabulary"></small>':''}${line.grammar?'<small class="lyrics-grammar"></small>':''}`;
+        article.querySelector('.lyrics-japanese').textContent=line.japanese||'';
+        article.querySelector('.lyrics-translation').textContent=line.translation||'';
+        article.querySelector('.lyrics-vocabulary')?.append('單字：'+vocab);
+        article.querySelector('.lyrics-grammar')?.append('文法：'+line.grammar);
+        results.append(article);
+      }); status.textContent=`完成 ${data.lines.length} 行解析`;
+    }catch(err){error.textContent=err.message; error.hidden=false; status.textContent='請修改歌詞後再試一次。';}
+    finally{button.disabled=false;}
+  });
+}
 if(kanaListening){
   const cards=JSON.parse(document.querySelector('[data-kana-practice]')?.dataset.kanaCards||'[]');
   const symbol=kanaListening.querySelector('[data-kana-listen-symbol]');
