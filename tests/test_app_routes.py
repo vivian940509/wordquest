@@ -551,6 +551,31 @@ def test_campaign_continues_until_stage_word_count():
             assert "level_summary" not in session
 
 
+def test_wrong_campaign_answer_advances_without_dictionary_lookup(monkeypatch):
+    app.config["TESTING"] = True
+
+    def forbidden_lookup(*args, **kwargs):
+        raise AssertionError("campaign answers must not wait for dictionary lookup")
+
+    monkeypatch.setattr("app.lookup_word", forbidden_lookup)
+    with app.test_client() as client:
+        client.get("/battle?chapter=1&stage=101&difficulty=beginner&restart=1")
+        with client.session_transaction() as session:
+            question = session["question"]
+        wrong_answer = next(option for option in question["options"] if option != question["answer"])
+
+        response = client.post("/answer", data={"selected": wrong_answer})
+
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/battle?chapter=1&stage=101&difficulty=beginner")
+        with client.session_transaction() as session:
+            stored = session["campaign_run"]["results"][0]
+        assert stored["correct"] is False
+        assert stored["selected"] == wrong_answer
+        assert stored["answer"] == question["answer"]
+        assert stored["explanation"] == question["explanation"]
+
+
 def test_campaign_practices_each_preview_word_once_before_summary():
     app.config["TESTING"] = True
     with app.test_client() as client:
