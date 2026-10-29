@@ -258,6 +258,8 @@ def battle():
         round_no=1; seed=int(time.time())
     used_answers=[result.get("word") or result.get("answer") for result in run.get("results",[])] if stage and not challenge else []
     q=build_battle(seed=seed,mistake_streak=int(session.get("mistake_streak",0)),difficulty=difficulty,chapter_id=chapter,stage_id=stage,excluded_words=used_answers)
+    q["hp_protection"]=4 if p.get("equipped_gear")=="memory_amulet" else 0
+    q["speech_bonus"]=10 if p.get("equipped_gear")=="pronunciation_wand" else 0
     q["challenge_code"]=challenge_code if challenge else ""; q["challenge_round"]=round_no if challenge else 0
     if stage and not challenge:
         q.update({"campaign_round":round_no,"campaign_total":campaign_total_for(chapter, stage),"campaign_mode":True,"defer_stage_progress":True})
@@ -265,25 +267,32 @@ def battle():
     return render_template("battle.html",profile=p,question=q)
 @app.post("/answer")
 def answer():
-    p=current_user(); q=session.pop("question",None)
+    q=session.pop("question",None)
     if not q:return redirect(url_for("map_page"))
-    selected=request.form.get("selected",""); speech_score=request.form.get("speech_score",type=int); protect=4 if has_item(p["id"],"memory_amulet") else 0
-    speech_score=min(100,(speech_score or 0)+10) if q["mode"]=="speech" and has_item(p["id"],"pronunciation_wand") else speech_score
+    campaign_mode=bool(q.get("campaign_mode")); user_id=session.get("user_id")
+    if not user_id:user_id=current_user()["id"]
+    selected=request.form.get("selected",""); speech_score=request.form.get("speech_score",type=int)
+    protect=int(q.get("hp_protection",0)) if campaign_mode else (4 if has_item(user_id,"memory_amulet") else 0)
+    speech_bonus=int(q.get("speech_bonus",0)) if campaign_mode else (10 if q["mode"]=="speech" and has_item(user_id,"pronunciation_wand") else 0)
+    speech_score=min(100,(speech_score or 0)+speech_bonus) if q["mode"]=="speech" and speech_bonus else speech_score
     result=grade_answer(q,selected,speech_score=speech_score,hp_protection=protect); session["mistake_streak"]=0 if result["correct"] else int(session.get("mistake_streak",0))+1
     word=q.get("word") or (q["answer"].split()[0] if q["mode"] in {"shield","speech","review"} else q.get("answer",""))
     elapsed=max(0,int(time.time()*1000)-int(session.get("question_started_ms",int(time.time()*1000))))
-    newly=apply_battle_result(p["id"],word,result["correct"],result["exp"],result["coins"],result["hp_delta"],q,selected,elapsed,result.get("speech_score"),check_achievements=not q.get("campaign_mode"))
+    newly=[] if campaign_mode else apply_battle_result(user_id,word,result["correct"],result["exp"],result["coins"],result["hp_delta"],q,selected,elapsed,result.get("speech_score"),check_achievements=True)
     for a in newly or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
     if q.get("challenge_code"):
         combo=int(session.get("challenge_combo",0)); combo=combo+1 if result["correct"] else 0; session["challenge_combo"]=combo
-        record_challenge_result(q["challenge_code"],p["id"],p["username"],result["correct"],elapsed,combo=combo)
-    item={"correct":bool(result["correct"]),"elapsed_ms":elapsed,"exp":result["exp"],"coins":result["coins"],"word":word,"answer":q.get("answer"),"selected":selected,"prompt":q.get("prompt"),"explanation":q.get("explanation","")}
+        p=current_user(); record_challenge_result(q["challenge_code"],user_id,p["username"],result["correct"],elapsed,combo=combo)
+    item={"correct":bool(result["correct"]),"elapsed_ms":elapsed,"exp":result["exp"],"coins":result["coins"],"hp_delta":result["hp_delta"],"speech_score":result.get("speech_score"),"word":word,"answer":q.get("answer"),"selected":selected,"prompt":q.get("prompt"),"explanation":q.get("explanation","")}
     if q.get("campaign_mode"):
         run=session.get("campaign_run") or {"results":[]}; run.setdefault("results",[]).append(item); session["campaign_run"]=run
         campaign_total=campaign_total_for(run.get("chapter_id"),run.get("stage_id"))
         if len(run["results"])>=campaign_total:
+            for saved in run["results"]:
+                saved_question={"chapter_id":run.get("chapter_id"),"stage_id":run.get("stage_id"),"difficulty":run.get("difficulty"),"mode":"campaign","prompt":saved.get("prompt"),"answer":saved.get("answer"),"defer_stage_progress":True}
+                apply_battle_result(user_id,saved.get("word"),saved.get("correct"),saved.get("exp",0),saved.get("coins",0),saved.get("hp_delta",0),saved_question,saved.get("selected",""),saved.get("elapsed_ms",0),saved.get("speech_score"),check_achievements=False)
             summary=run_summary(run["results"],campaign_total); summary.update({"stage_id":run.get("stage_id"),"chapter_id":run.get("chapter_id"),"difficulty":run.get("difficulty")})
-            achievements=record_stage_completion(p["id"],run.get("stage_id"),summary["stars"],summary["score"],completed=summary["correct"]>=max(1,(campaign_total+1)//2))
+            achievements=record_stage_completion(user_id,run.get("stage_id"),summary["stars"],summary["score"],completed=summary["correct"]>=max(1,(campaign_total+1)//2))
             for a in achievements or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
             session["level_summary"]=summary; session.pop("campaign_run",None); session.pop("last_result",None)
             return redirect(url_for("level_summary"))

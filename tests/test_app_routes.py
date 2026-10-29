@@ -557,12 +557,16 @@ def test_wrong_campaign_answer_advances_without_dictionary_lookup(monkeypatch):
     def forbidden_lookup(*args, **kwargs):
         raise AssertionError("campaign answers must not wait for dictionary lookup")
 
-    monkeypatch.setattr("app.lookup_word", forbidden_lookup)
     with app.test_client() as client:
         client.get("/battle?chapter=1&stage=101&difficulty=beginner&restart=1")
         with client.session_transaction() as session:
             question = session["question"]
         wrong_answer = next(option for option in question["options"] if option != question["answer"])
+
+        monkeypatch.setattr("app.lookup_word", forbidden_lookup)
+        monkeypatch.setattr("app.apply_battle_result", forbidden_lookup)
+        monkeypatch.setattr("app.current_user", forbidden_lookup)
+        monkeypatch.setattr("app.has_item", forbidden_lookup)
 
         response = client.post("/answer", data={"selected": wrong_answer})
 
@@ -599,7 +603,7 @@ def test_campaign_practices_each_preview_word_once_before_summary():
         assert set(practiced_words) == preview_words
 
 
-def test_level_summary_shows_wrong_answers_in_dropdown():
+def test_level_summary_renders_detailed_wrong_answer_review():
     app.config["TESTING"] = True
     with app.test_client() as client:
         with client.session_transaction() as session:
@@ -617,18 +621,52 @@ def test_level_summary_shows_wrong_answers_in_dropdown():
                 "score": 76,
                 "weakest": "library",
                 "wrong": [
-                    {"answer": "library", "selected": "student", "prompt": "這是日常與課堂中很常遇到的字：圖書館。"}
+                    {
+                        "answer": "library",
+                        "selected": "student",
+                        "prompt": "這是日常與課堂中很常遇到的字：圖書館。",
+                        "explanation": "library 是圖書館，student 是學生。",
+                    }
                 ],
             }
         response = client.get("/level-summary")
 
     html = response.data.decode("utf-8")
     assert response.status_code == 200
-    assert "<details" in html
-    assert "<summary" in html
-    assert "本關錯題 1 題" in html
+    assert "錯題集中解析" in html
+    assert "這是日常與課堂中很常遇到的字：圖書館。" in html
+    assert "你的答案" in html
     assert "library" in html
     assert "student" in html
+    assert "library 是圖書館，student 是學生。" in html
+
+
+def test_level_summary_with_perfect_score_has_no_wrong_review_cards():
+    app.config["TESTING"] = True
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["level_summary"] = {
+                "stage_id": 101,
+                "chapter_id": 1,
+                "difficulty": "beginner",
+                "stars": 5,
+                "correct": 10,
+                "attempts": 10,
+                "accuracy": 100,
+                "avg_seconds": 0.8,
+                "exp": 100,
+                "coins": 30,
+                "score": 100,
+                "weakest": None,
+                "wrong": [],
+            }
+        response = client.get("/level-summary")
+
+    html = response.data.decode("utf-8")
+    assert response.status_code == 200
+    assert "錯題集中解析" in html
+    assert "這一關全部答對，沒有需要複習的錯題。" in html
+    assert 'class="wrong-review-card"' not in html
 
 
 def test_pronounce_audio_falls_back_to_google_when_dictionary_audio_fails(monkeypatch):
