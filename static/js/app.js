@@ -200,8 +200,9 @@ if(lyricsStudy){
       data.lines.forEach(line=>{
         const article=document.createElement('article'); article.className='lyrics-line';
         const vocab=(line.vocabulary||[]).map(item=>typeof item==='string'?item:`${item.word||''} ${item.reading?'（'+item.reading+'）':''}：${item.meaning||''}`).join('、');
-        article.innerHTML=`<p class="lyrics-japanese"></p><strong class="lyrics-translation"></strong>${vocab?'<small class="lyrics-vocabulary"></small>':''}${line.grammar?'<small class="lyrics-grammar"></small>':''}`;
+        article.innerHTML=`<p class="lyrics-japanese"></p>${line.romaji?'<p class="lyrics-romaji"></p>':''}<strong class="lyrics-translation"></strong>${vocab?'<small class="lyrics-vocabulary"></small>':''}${line.grammar?'<small class="lyrics-grammar"></small>':''}`;
         article.querySelector('.lyrics-japanese').textContent=line.japanese||'';
+        const romaji=article.querySelector('.lyrics-romaji'); if(romaji)romaji.textContent=line.romaji||'';
         article.querySelector('.lyrics-translation').textContent=line.translation||'';
         article.querySelector('.lyrics-vocabulary')?.append('單字：'+vocab);
         article.querySelector('.lyrics-grammar')?.append('文法：'+line.grammar);

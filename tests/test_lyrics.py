@@ -1,4 +1,20 @@
+import ai_teacher
 from app import app
+
+
+def test_local_lyrics_fallback_includes_romaji_and_trusted_translation(monkeypatch):
+    monkeypatch.delenv("AI_API_KEY", raising=False)
+
+    lines, source = ai_teacher.explain_lyrics("かっこいいから好きなんじゃない")
+
+    assert source == "local"
+    assert lines == [{
+        "japanese": "かっこいいから好きなんじゃない",
+        "romaji": "ka kko ii ka ra suki nan ja na i",
+        "translation": "我不是因為你很酷才喜歡你",
+        "vocabulary": [],
+        "grammar": "",
+    }]
 
 
 def test_lyrics_translation_endpoint_validates_and_returns_line_notes(monkeypatch):
@@ -19,3 +35,13 @@ def test_japanese_page_includes_lyrics_study_form():
     assert "貼上歌詞" in html
     assert "data-lyrics-form" in html
     assert "data-lyrics-results" in html
+
+
+def test_lyrics_results_render_optional_romaji_line():
+    javascript = (app.root_path + "/static/js/app.js")
+    with open(javascript, encoding="utf-8") as source:
+        content = source.read()
+    assert "lyrics-romaji" in content
+    assert "if(romaji)" in content
+    with open(app.root_path + "/static/css/style.css", encoding="utf-8") as source:
+        assert ".lyrics-romaji" in source.read()
