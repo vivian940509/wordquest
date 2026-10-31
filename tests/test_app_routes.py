@@ -284,22 +284,42 @@ def test_register_logs_in_without_email_verification(monkeypatch):
     assert auth_email == "nova@example.com"
 
 
-def test_answer_redirects_to_get_result_page():
+def test_wrong_answer_redirects_to_get_result_page():
     app.config["TESTING"] = True
     with app.test_client() as client:
         client.get("/battle")
         with client.session_transaction() as session:
             question = session["question"]
-        response = client.post("/answer", data={"selected": question["answer"]})
+        wrong_answer = next(option for option in question["options"] if option != question["answer"])
+        response = client.post("/answer", data={"selected": wrong_answer})
         assert response.status_code == 302
         assert response.headers["Location"].endswith("/result")
 
         result_response = client.get("/result")
         assert result_response.status_code == 200
-        assert "回關卡地圖".encode("utf-8") in result_response.data
+        assert "這題已加入錯題複習".encode("utf-8") in result_response.data
 
 
-def test_answer_uses_fast_dictionary_lookup_before_result(monkeypatch):
+def test_correct_answer_skips_result_page_and_dictionary_lookup(monkeypatch):
+    app.config["TESTING"] = True
+
+    def forbidden_lookup(*args, **kwargs):
+        raise AssertionError("correct answers should not wait for result-page dictionary lookup")
+
+    monkeypatch.setattr("app.lookup_word", forbidden_lookup)
+    with app.test_client() as client:
+        client.get("/battle")
+        with client.session_transaction() as session:
+            question = session["question"]
+        response = client.post("/answer", data={"selected": question["answer"]})
+
+        assert response.status_code == 302
+        assert response.headers["Location"].startswith("/battle")
+        with client.session_transaction() as session:
+            assert "last_result" not in session
+
+
+def test_wrong_answer_uses_fast_dictionary_lookup_before_result(monkeypatch):
     app.config["TESTING"] = True
     observed_timeouts = []
 
@@ -312,7 +332,8 @@ def test_answer_uses_fast_dictionary_lookup_before_result(monkeypatch):
         client.get("/battle")
         with client.session_transaction() as session:
             question = session["question"]
-        response = client.post("/answer", data={"selected": question["answer"]})
+        wrong_answer = next(option for option in question["options"] if option != question["answer"])
+        response = client.post("/answer", data={"selected": wrong_answer})
 
     assert response.status_code == 302
     assert observed_timeouts
@@ -419,7 +440,7 @@ def test_result_page_uses_local_word_explanation_when_dictionary_is_unavailable(
                 "example": "Be confident when you speak.",
                 "explanation": "confident 是「有自信的」。",
             }
-        client.post("/answer", data={"selected": "confident"})
+        client.post("/answer", data={"selected": "nervous"})
         response = client.get("/result")
 
     assert response.status_code == 200

@@ -303,6 +303,17 @@ def answer():
         if limit and len(run["results"])>=int(limit):
             session["practice_summary"]=run_summary(run["results"],int(limit)); session.pop("practice_run",None)
             return redirect(url_for("practice_summary"))
+    if result["correct"]:
+        session.pop("last_result",None)
+        if q.get("challenge_code"):
+            if int(q.get("challenge_round",0)) >= 5:
+                return redirect(url_for("friends",code=q["challenge_code"]))
+            return redirect(url_for("battle",chapter=q.get("chapter_id"),stage=q.get("stage_id") or "",difficulty=q.get("difficulty"),challenge=q["challenge_code"],round=int(q.get("challenge_round",0))+1))
+        if q.get("practice_mode"):
+            return redirect(url_for("practice_battle"))
+        if q.get("is_review"):
+            return redirect(url_for("review"))
+        return redirect(url_for("battle",chapter=q.get("chapter_id"),stage=q.get("stage_id") or "",difficulty=q.get("difficulty")))
     analysis=build_wrong_answer_analysis(q,selected); dictionary=enrich_dictionary(word,lookup_result_dictionary(word) if word else None)
     session["last_result"]={"question":q,"selected":selected,"result":result,"dictionary":dictionary,"analysis":analysis}
     return redirect(url_for("result"))
