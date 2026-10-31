@@ -388,6 +388,40 @@ def test_final_campaign_answer_goes_to_summary_without_dictionary_lookup(monkeyp
     assert response.headers["Location"].endswith("/level-summary")
 
 
+def test_final_campaign_batches_saved_answers_once(monkeypatch):
+    app.config["TESTING"] = True
+    observed = []
+
+    def fake_batch(user_id, results):
+        observed.append((user_id, results))
+        return []
+
+    def forbidden_single_result(*args, **kwargs):
+        raise AssertionError("final campaign answer should not replay every result one by one")
+
+    monkeypatch.setattr("app.apply_campaign_results", fake_batch)
+    monkeypatch.setattr("app.apply_battle_result", forbidden_single_result)
+    monkeypatch.setattr("app.record_stage_completion", lambda *args, **kwargs: [])
+    with app.test_client() as client:
+        client.get("/battle?chapter=1&stage=101&difficulty=beginner&restart=1")
+        with client.session_transaction() as session:
+            run = session["campaign_run"]
+            run["results"] = [
+                {"correct": True, "elapsed_ms": 500, "exp": 10, "coins": 3, "word": "starving", "answer": "starving", "selected": "starving", "prompt": "p"}
+                for _ in range(9)
+            ]
+            session["campaign_run"] = run
+        client.get("/battle?chapter=1&stage=101&difficulty=beginner")
+        with client.session_transaction() as session:
+            question = session["question"]
+        response = client.post("/answer", data={"selected": question["answer"]})
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/level-summary")
+    assert len(observed) == 1
+    assert len(observed[0][1]) == 10
+
+
 def test_campaign_question_totals_match_preview_count_for_all_school_levels(monkeypatch):
     profile = database.ensure_guest_profile(username="Test Runner")
     profile["unlocked_chapter"] = 4

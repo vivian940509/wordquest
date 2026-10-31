@@ -4,7 +4,7 @@ from urllib.parse import quote
 from dotenv import load_dotenv
 from flask import Flask, Response, jsonify, redirect, render_template, request, session, url_for, flash
 from battle_engine import build_battle, build_cloze_question, build_review_question, build_speech_challenge, grade_answer, build_wrong_answer_analysis
-from database import (apply_battle_result, record_stage_completion, fetch_learning_analytics, fetch_mistake_words, fetch_unmastered_words, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress, fetch_map_snapshot,
+from database import (apply_battle_result, apply_campaign_results, record_stage_completion, fetch_learning_analytics, fetch_mistake_words, fetch_unmastered_words, ensure_guest_profile, ensure_auth_profile, update_username, fetch_profile, fetch_vocabulary, fetch_stage_progress, fetch_map_snapshot,
                       fetch_daily, fetch_items, buy_item, has_item, create_challenge, fetch_challenge, touch_login, record_challenge_result, challenge_leaderboard,
                       claim_daily_mission, fetch_due_vocabulary, equip_item, unequip_item, fetch_recent_mistakes, clear_challenge_results, fetch_achievements, achievement_metrics)
 from database import fetch_favorites, set_favorite
@@ -289,10 +289,10 @@ def answer():
         campaign_total=campaign_total_for(run.get("chapter_id"),run.get("stage_id"))
         if len(run["results"])>=campaign_total:
             for saved in run["results"]:
-                saved_question={"chapter_id":run.get("chapter_id"),"stage_id":run.get("stage_id"),"difficulty":run.get("difficulty"),"mode":"campaign","prompt":saved.get("prompt"),"answer":saved.get("answer"),"defer_stage_progress":True}
-                apply_battle_result(user_id,saved.get("word"),saved.get("correct"),saved.get("exp",0),saved.get("coins",0),saved.get("hp_delta",0),saved_question,saved.get("selected",""),saved.get("elapsed_ms",0),saved.get("speech_score"),check_achievements=False)
+                saved.update({"chapter_id":run.get("chapter_id"),"stage_id":run.get("stage_id"),"difficulty":run.get("difficulty"),"mode":"campaign"})
+            apply_campaign_results(user_id,run["results"])
             summary=run_summary(run["results"],campaign_total); summary.update({"stage_id":run.get("stage_id"),"chapter_id":run.get("chapter_id"),"difficulty":run.get("difficulty")})
-            achievements=record_stage_completion(user_id,run.get("stage_id"),summary["stars"],summary["score"],completed=summary["correct"]>=max(1,(campaign_total+1)//2))
+            achievements=record_stage_completion(user_id,run.get("stage_id"),summary["stars"],summary["score"],completed=summary["correct"]>=max(1,(campaign_total+1)//2),check_achievements=False)
             for a in achievements or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
             session["level_summary"]=summary; session.pop("campaign_run",None); session.pop("last_result",None)
             return redirect(url_for("level_summary"))

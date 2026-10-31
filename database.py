@@ -249,6 +249,51 @@ def apply_battle_result(user_id, word, correct, exp, coins, hp_delta=0, question
     return refresh_achievements(user_id) if check_achievements else []
 
 
+def apply_campaign_results(user_id, results):
+    """Persist one completed campaign in a few bulk statements instead of replaying every answer request."""
+    entries=[dict(result) for result in results if result.get("word")]
+    if not entries:
+        return []
+    total_exp=sum(int(result.get("exp",0) or 0) for result in entries)
+    total_coins=sum(int(result.get("coins",0) or 0) for result in entries)
+    total_hp=sum(int(result.get("hp_delta",0) or 0) for result in entries)
+    words=list(dict.fromkeys(str(result["word"]) for result in entries))
+    with db_connection() as c:
+        c.execute(text("UPDATE users_profile SET exp=exp+:e, coins=coins+:co, hp=CASE WHEN hp+:hp < 0 THEN 0 WHEN hp+:hp > 100 THEN 100 ELSE hp+:hp END, level=1+((exp+:e)/100) WHERE id=:u"),{"u":user_id,"e":total_exp,"co":total_coins,"hp":total_hp})
+        word_params={f"w{i}":word for i,word in enumerate(words)}
+        placeholders=", ".join(f":w{i}" for i in range(len(words)))
+        rows=c.execute(text(f"SELECT word,proficiency_level,mistake_count,correct_count,last_wrong_at FROM user_vocabulary WHERE user_id=:u AND word IN ({placeholders})"),{"u":user_id,**word_params}).mappings().all()
+        state={row["word"]:dict(row) for row in rows}
+        now=datetime.now(timezone.utc).isoformat()
+        for result in entries:
+            word=str(result["word"]); old=state.get(word,{"proficiency_level":0,"mistake_count":0,"correct_count":0,"last_wrong_at":None})
+            correct=bool(result.get("correct")); level=min(5,int(old["proficiency_level"])+1) if correct else max(0,int(old["proficiency_level"])-1)
+            mistakes=int(old["mistake_count"])+(0 if correct else 1); correct_count=int(old["correct_count"])+(1 if correct else 0)
+            state[word]={"word":word,"proficiency_level":level,"next_review_time":next_review_time(level if correct else 0).isoformat(),"mistake_count":mistakes,"correct_count":correct_count,"weak_word":mistakes>=3,"last_wrong_at":old.get("last_wrong_at") if correct else now}
+        vocab_params={"u":user_id}; vocab_values=[]
+        for index,row in enumerate(state.values()):
+            keys=[]
+            for key,value in row.items():
+                name=f"v{index}_{key}"; vocab_params[name]=value; keys.append(f":{name}")
+            vocab_values.append("("+", ".join(keys)+", CURRENT_TIMESTAMP)")
+        c.execute(text("""INSERT INTO user_vocabulary(user_id,word,proficiency_level,next_review_time,mistake_count,correct_count,weak_word,last_wrong_at,last_seen_at)
+            VALUES """+", ".join("(:u, "+value[1:] for value in vocab_values)+""" ON CONFLICT(user_id,word) DO UPDATE SET
+            proficiency_level=excluded.proficiency_level,next_review_time=excluded.next_review_time,mistake_count=excluded.mistake_count,correct_count=excluded.correct_count,weak_word=excluded.weak_word,last_wrong_at=excluded.last_wrong_at,last_seen_at=CURRENT_TIMESTAMP"""),vocab_params)
+        history_params={"u":user_id}; history_values=[]
+        for index,result in enumerate(entries):
+            fields={"ch":result.get("chapter_id"),"st":result.get("stage_id"),"d":result.get("difficulty"),"mo":result.get("mode"),"p":result.get("prompt"),"s":result.get("selected",""),"a":result.get("answer"),"ok":bool(result.get("correct")),"ms":int(result.get("elapsed_ms",0) or 0),"ss":result.get("speech_score")}
+            names=[]
+            for key,value in fields.items():
+                name=f"h{index}_{key}"; history_params[name]=value; names.append(f":{name}")
+            history_values.append("(:u, "+", ".join(names)+")")
+        c.execute(text("""INSERT INTO answer_history(user_id,chapter_id,stage_id,difficulty,mode,prompt,selected_answer,correct_answer,is_correct,response_ms,speech_score)
+            VALUES """+", ".join(history_values)),history_params)
+        correct_count=sum(1 for result in entries if result.get("correct"))
+        c.execute(text("""INSERT INTO daily_progress(user_id,progress_date,correct_answers) VALUES(:u,:today,:correct)
+            ON CONFLICT(user_id,progress_date) DO UPDATE SET correct_answers=daily_progress.correct_answers+:correct"""),{"u":user_id,"today":app_today().isoformat(),"correct":correct_count})
+    return []
+
+
 def fetch_favorites(user_id):
     with db_connection() as c:
         return list(c.execute(text("SELECT word FROM user_favorites WHERE user_id=:u ORDER BY created_at DESC,word"), {"u":user_id}).scalars())
@@ -438,7 +483,7 @@ def fetch_recent_mistakes(user_id, limit=10):
         return [dict(x) for x in rows]
 
 
-def record_stage_completion(user_id, stage_id, stars, score, completed=True):
+def record_stage_completion(user_id, stage_id, stars, score, completed=True, check_achievements=True):
     """Commit one campaign run to stage progress exactly once at run completion."""
     if not stage_id: return
     stored_stars=max(0,min(STAGE_MAX_STARS,int(stars)))
@@ -458,7 +503,7 @@ def record_stage_completion(user_id, stage_id, stars, score, completed=True):
         if completed and int(stage_id)%100==len(next((c0["stages"] for c0 in CHAPTERS if c0["id"]==int(stage_id)//100), [])):
             next_ch=min(len(CHAPTERS),int(stage_id)//100+1)
             c.execute(text("UPDATE users_profile SET unlocked_chapter=CASE WHEN unlocked_chapter>:n THEN unlocked_chapter ELSE :n END WHERE id=:u"),{"n":next_ch,"u":user_id})
-    return refresh_achievements(user_id)
+    return refresh_achievements(user_id) if check_achievements else []
 
 
 def fetch_learning_analytics(user_id):
