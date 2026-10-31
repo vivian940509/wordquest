@@ -319,6 +319,29 @@ def test_correct_answer_skips_result_page_and_dictionary_lookup(monkeypatch):
             assert "last_result" not in session
 
 
+def test_correct_answer_reuses_question_gear_and_defers_achievement_refresh(monkeypatch):
+    app.config["TESTING"] = True
+    observed = []
+
+    def forbidden_has_item(*args, **kwargs):
+        raise AssertionError("answer route should reuse hp_protection and speech_bonus stored with the question")
+
+    def fake_apply(*args, **kwargs):
+        observed.append(kwargs)
+        return []
+
+    monkeypatch.setattr("app.has_item", forbidden_has_item)
+    monkeypatch.setattr("app.apply_battle_result", fake_apply)
+    with app.test_client() as client:
+        client.get("/battle")
+        with client.session_transaction() as session:
+            question = session["question"]
+        response = client.post("/answer", data={"selected": question["answer"]})
+
+    assert response.status_code == 302
+    assert observed == [{"check_achievements": False}]
+
+
 def test_wrong_answer_uses_fast_dictionary_lookup_before_result(monkeypatch):
     app.config["TESTING"] = True
     observed_timeouts = []

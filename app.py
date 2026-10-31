@@ -272,13 +272,13 @@ def answer():
     campaign_mode=bool(q.get("campaign_mode")); user_id=session.get("user_id")
     if not user_id:user_id=current_user()["id"]
     selected=request.form.get("selected",""); speech_score=request.form.get("speech_score",type=int)
-    protect=int(q.get("hp_protection",0)) if campaign_mode else (4 if has_item(user_id,"memory_amulet") else 0)
-    speech_bonus=int(q.get("speech_bonus",0)) if campaign_mode else (10 if q["mode"]=="speech" and has_item(user_id,"pronunciation_wand") else 0)
+    protect=int(q.get("hp_protection",0))
+    speech_bonus=int(q.get("speech_bonus",0)) if q["mode"]=="speech" else 0
     speech_score=min(100,(speech_score or 0)+speech_bonus) if q["mode"]=="speech" and speech_bonus else speech_score
     result=grade_answer(q,selected,speech_score=speech_score,hp_protection=protect); session["mistake_streak"]=0 if result["correct"] else int(session.get("mistake_streak",0))+1
     word=q.get("word") or (q["answer"].split()[0] if q["mode"] in {"shield","speech","review"} else q.get("answer",""))
     elapsed=max(0,int(time.time()*1000)-int(session.get("question_started_ms",int(time.time()*1000))))
-    newly=[] if campaign_mode else apply_battle_result(user_id,word,result["correct"],result["exp"],result["coins"],result["hp_delta"],q,selected,elapsed,result.get("speech_score"),check_achievements=True)
+    newly=[] if campaign_mode else apply_battle_result(user_id,word,result["correct"],result["exp"],result["coins"],result["hp_delta"],q,selected,elapsed,result.get("speech_score"),check_achievements=not result["correct"])
     for a in newly or []: flash(f"成就解鎖：{a['icon']} {a['title']}，獲得 {a['reward']} 金幣！")
     if q.get("challenge_code"):
         combo=int(session.get("challenge_combo",0)); combo=combo+1 if result["correct"] else 0; session["challenge_combo"]=combo
