@@ -13,6 +13,7 @@
       </div>
 
       <div class="answer-compare">
+        <p class="answered-prompt">{{ question.prompt|replace('_____', analysis.correct_answer) }}</p>
         <section class="answer-box wrong-box">
           <small>你選了什麼</small>
           <strong>{{ analysis.selected }}</strong>
