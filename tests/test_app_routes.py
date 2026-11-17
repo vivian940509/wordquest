@@ -462,13 +462,13 @@ def test_campaign_question_totals_match_preview_count_for_all_school_levels(monk
             assert response.headers["Location"].endswith("/level-summary")
 
 
-def test_battle_page_uses_clear_learning_instruction():
+def test_battle_page_uses_clear_learning_instruction_and_chinese_help():
     app.config["TESTING"] = True
     with app.test_client() as client:
         response = client.get("/battle")
     assert response.status_code == 200
     assert "選出符合情境的英文".encode("utf-8") in response.data
-    assert "中文提示".encode("utf-8") not in response.data
+    assert "中文提示".encode("utf-8") in response.data
 
 
 def test_result_page_uses_local_word_explanation_when_dictionary_is_unavailable(monkeypatch):

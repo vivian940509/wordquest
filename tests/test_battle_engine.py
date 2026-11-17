@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from battle_engine import build_battle, build_speech_challenge, build_vocab_question, grade_answer, next_review_time
 from word_data import STARTER_WORDS
+from word_data import CLOZE_TRAPS
 
 
 def test_vocab_question_uses_two_options_after_mistakes():
@@ -60,3 +61,12 @@ def test_starter_words_have_study_card_fields():
     assert first_word["zh"]
     assert first_word["context"]
     assert first_word["example"]
+
+
+def test_each_chapter_has_its_own_cloze_questions():
+    chapters = {item["chapter"] for item in CLOZE_TRAPS}
+    assert chapters == {1, 2, 3, 4}
+    for chapter in chapters:
+        questions = [item for item in CLOZE_TRAPS if item["chapter"] == chapter]
+        assert len(questions) >= 2
+        assert all(item["answer"] in item["options"] for item in questions)

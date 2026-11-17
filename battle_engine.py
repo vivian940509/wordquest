@@ -34,8 +34,8 @@ def build_vocab_question(seed=None, weak_mode=False, difficulty="beginner", chap
     if weak_mode and difficulty == "beginner":
         options = [card["word"], distractors[0]] if distractors else [card["word"]]
     rng.shuffle(options)
-    prompt = card["context"] if difficulty != "advanced" else card["example"].replace(card["word"], "_____")
-    instruction = "選出符合情境的英文" if difficulty != "advanced" else "Choose the best word for the sentence"
+    prompt = card["context"] if difficulty != "advanced" else f"{card['example'].replace(card['word'], '_____')}（中文意思：{card['context']}）"
+    instruction = "選出符合情境的英文" if difficulty != "advanced" else "選出句子中最適合的單字"
     show_hints = difficulty == "beginner"
     return {
         "mode": "shield",
@@ -67,7 +67,9 @@ def build_cloze_question(seed=None, chapter_id=2, stage_id=None):
     return {
         "mode": "trap", "difficulty": "advanced", "difficulty_label": "高級",
         "chapter_id": chapter_id, "stage_id": stage_id, "monster": "文法寶箱",
-        "instruction": "選出正確的填空答案", "prompt": trap["prompt"], "answer": trap["answer"],
+        "instruction": "選出正確的填空答案", "prompt": f"{trap['prompt']}（中文提示：{trap['explanation']}）",
+        "prompt_zh": f"中文意思：請根據句意完成填空（答案：{WORD_HINTS.get(trap['answer'], trap['answer'])}）。",
+        "answer": trap["answer"],
         "answer_zh": WORD_HINTS.get(trap["answer"], ""), "options": options, "show_hints": False,
         "option_details": {option: WORD_HINTS.get(option, "文法選項") for option in options},
         "example": trap["prompt"].replace("_____", trap["answer"]),
@@ -83,7 +85,7 @@ def build_speech_challenge(seed=None, chapter_id=1, stage_id=None, difficulty="i
     return {
         "mode":"speech", "difficulty":difficulty, "difficulty_label":DIFFICULTY_LABELS.get(difficulty, difficulty),
         "chapter_id":chapter_id, "stage_id":stage_id, "monster":"回音法師", "instruction":"跟著唸出這個單字",
-        "prompt":card["word"], "word":card["word"], "answer":card["word"], "answer_zh":card["zh"], "options":[], "show_hints":False,
+        "prompt":f"{card['word']}（中文意思：{card['zh']}）", "word":card["word"], "answer":card["word"], "answer_zh":card["zh"], "options":[], "show_hints":False,
         "option_details":{}, "example":card["example"], "memory_tip":"先慢慢唸清楚，再追求速度。",
         "speech_prefix":prefix, "speech_cloze":cloze,
         "explanation":"系統會依瀏覽器辨識結果估算相似度，並給你發音練習建議。",
