@@ -21,6 +21,7 @@
         <section class="answer-box correct-box">
           <small>正確答案</small>
           <strong>{{ analysis.correct_answer }}</strong>
+          <span class="answer-meaning">{{ question.answer_zh or (dictionary.local_hint if dictionary else '') }}</span>
           <span>先把正確字義和情境連在一起</span>
         </section>
       </div>
