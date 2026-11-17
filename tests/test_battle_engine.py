@@ -70,3 +70,10 @@ def test_each_chapter_has_its_own_cloze_questions():
         questions = [item for item in CLOZE_TRAPS if item["chapter"] == chapter]
         assert len(questions) >= 2
         assert all(item["answer"] in item["options"] for item in questions)
+
+
+def test_advanced_word_stages_stay_vocab_and_cloze_stages_use_traps():
+    word_question = build_battle(seed=1, difficulty="advanced", chapter_id=1, stage_id=105)
+    cloze_question = build_battle(seed=1, difficulty="advanced", chapter_id=1, stage_id=109)
+    assert word_question["mode"] == "shield"
+    assert cloze_question["mode"] == "trap"

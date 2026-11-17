@@ -2,7 +2,7 @@ import random
 from datetime import datetime, timedelta, timezone
 from difflib import SequenceMatcher
 
-from word_data import CLOZE_TRAPS, STARTER_WORDS, WORD_HINTS, chapter_words, stage_words
+from word_data import CHAPTERS, CLOZE_TRAPS, STARTER_WORDS, WORD_HINTS, chapter_words, stage_words
 
 SRS_INTERVAL_DAYS = [0, 1, 3, 7, 14, 30]
 DIFFICULTY_LABELS = {"beginner": "初級", "intermediate": "中級", "advanced": "高級"}
@@ -15,6 +15,14 @@ def _available_cards(chapter_id, stage_id=None, excluded_words=None):
     if not cards and excluded:
         cards = stage_words(chapter_id, stage_id) if stage_id else chapter_words(chapter_id)
     return cards or STARTER_WORDS
+
+
+def _is_cloze_stage(chapter_id, stage_id):
+    if not stage_id:
+        return False
+    chapter = next((item for item in CHAPTERS if item["id"] == int(chapter_id)), None)
+    stage = next((item for item in (chapter or {}).get("stages", []) if item["id"] == int(stage_id)), None)
+    return bool(stage and "克漏字" in stage.get("title", ""))
 
 
 def build_vocab_question(seed=None, weak_mode=False, difficulty="beginner", chapter_id=1, stage_id=None, excluded_words=None):
@@ -94,7 +102,7 @@ def build_speech_challenge(seed=None, chapter_id=1, stage_id=None, difficulty="i
 
 def build_battle(seed=None, mistake_streak=0, difficulty="beginner", chapter_id=1, stage_id=None, excluded_words=None):
     rng = random.Random(seed)
-    if difficulty == "advanced":
+    if difficulty == "advanced" and _is_cloze_stage(chapter_id, stage_id):
         return build_cloze_question(seed=seed, chapter_id=chapter_id, stage_id=stage_id)
     return build_vocab_question(seed=seed, weak_mode=mistake_streak >= 2, difficulty=difficulty, chapter_id=chapter_id, stage_id=stage_id, excluded_words=excluded_words)
 
